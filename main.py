@@ -79,22 +79,17 @@ if __name__=="__main__":
     args = parser.parse_args()
     model_config = load_yaml_config_file(os.path.join(CONFIG_PATH, args.model_config_file))
     #Start training
-
     main(args)
 
 
-#ToDo:
-# Write argparse DONE
-# Run for all the models and the data Done!
-# Save the models checkpoint
-# Write a script for reloading the model
-# Hyperparameter tuning? ->
-# Implement training script for homophily, epochs, seeds
+#ToDo: 25.01.2024
+# Write conformal prediction split procedure
+# Train and save checkpoints for models
+# Write the diffusion score procedure
+# Write performance metric scores; singlehit and efficiency
+# Look into setup.py/toml installation script
 
-# Write conformal split procedure ToDo! ->
-# Get the singleton hit rate
-# Implement 1 hop neighbor diffusion score
 
-# Get the diffusion score!
+
 
 
