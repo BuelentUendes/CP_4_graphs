@@ -27,3 +27,5 @@ pip3 install -r requirements.txt
 python3 main.py
 ~~~
 
+The project was run on MacOS with Python 3.9.
+
