@@ -4,23 +4,24 @@ This is work in progress and will be updated incrementally.
 ___
 **Installation:**
 
-1. Please first create and activate a virtualenv via:
+1. Create a virtualenv of your choice
 
 ~~~
-Create a virtual env of your choice
 $ virtualenv <NAME_OF_YOUR_VIRTUALENV> 
+~~~
 
-Activate the virtual env
+2. Activate the virtual env
+~~~
 $ source <NAME_OF_YOUR_VIRTUALENV>/bin/activate
 ~~~
 
-2. Install the required packages for this project
+3. Install the required packages for this project
 
 ~~~
 pip3 install -r requirements.txt
 ~~~
 
-3. Now you can check if the installation has worked by running:
+4. Now you can check if the installation has worked by running:
 
 ~~~
 python3 main.py
