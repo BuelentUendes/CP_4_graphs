@@ -1,6 +1,6 @@
 # CP_4_graphs
-Code basis for the final course: "Machine Learning for Graphs" taught at the Vrije University Amsterdam, 2024. 
-This is work in progress and will be updated incrementally.
+Code basis for the final course: **"Machine Learning for Graphs"** taught at the Vrije University Amsterdam, 2024. 
+**This is work in progress and will be updated incrementally.**
 ___
 **Installation:**
 
