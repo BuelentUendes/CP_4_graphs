@@ -1,46 +1,23 @@
-models:
+models_config:
   GCN:
-    model_config:
-      n_hidden: 64
-      p_dropout: 0.8
-
-    optimizer:
-      optimizer_name: "adam"
-      learning_rate: 0.01
-      weight_decay: 0.001
+    n_hidden: 64
+    p_dropout: 0.8
 
   GAT:
-      model_config:
-        n_hidden: 64
-        n_heads: 8
-        p_dropout: 0.6
-        p_dropout_attention: 0.3
-
-      optimizer:
-        optimizer_name: "adam"
-        learning_rate: 0.01
-        weight_decay: 0.01
+    n_hidden: 64
+    n_heads: 8
+    p_dropout: 0.6
+    p_dropout_attention: 0.3
 
   SAGE:
-    model_config:
-      n_hidden: 64
-      p_dropout: 0.4
-
-    optimizer:
-      optimizer_name: "adam"
-      learning_rate: 0.001
-      weight_decay: 0.01
+    n_hidden: 64
+    p_dropout: 0.4
 
   APPNPNet:
-    model_config:
-      n_hidden: 64
-      p_dropout: 0.5
-      alpha: 0.1
-      k: 10
+    n_hidden: 64
+    p_dropout: 0.5
+    alpha: 0.1
+    k: 10
 
-    optimizer:
-      optimizer_name: "adam"
-      learning_rate: 0.01
-      weight_decay: 0.0001
 
 
