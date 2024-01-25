@@ -1,4 +1,4 @@
-# CP_4_graphs
+# Conformal predictions for Graphs
 Code basis for the final project of the course: **"Machine Learning for Graphs"** taught at the Vrije Universiteit Amsterdam, 2024. 
 **This is work in progress and will be updated incrementally.**
 ___
@@ -28,6 +28,8 @@ python3 main.py
 ~~~
 
 The "src" folder includes the source code for the models, whereas the "utils" folder includes additional utility functions needed for the project.
+
+**Tested environment:**
 
 The project was run and tested on both MacOS and Linux Ubuntu with Python 3.9 installed.
 
