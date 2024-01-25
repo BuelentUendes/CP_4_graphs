@@ -27,5 +27,7 @@ pip3 install -r requirements.txt
 python3 main.py
 ~~~
 
-The project was run on MacOS with Python 3.9.
+The "src" folder includes the source code for the models, whereas the "utils" folder includes additional utility functions needed for the project.
+The project was run on MacOS with Python 3.9 as well as Linux Ubuntu.
+
 
