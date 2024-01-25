@@ -28,6 +28,7 @@ python3 main.py
 ~~~
 
 The "src" folder includes the source code for the models, whereas the "utils" folder includes additional utility functions needed for the project.
+
 The project was run and tested on both MacOS and Linux Ubuntu with Python 3.9 installed.
 
 
