@@ -221,10 +221,12 @@ class DataManager:
         else:
             return true_train_idx, true_calibration_idx
 
+#Code adapted from:
+# https://github.com/soroushzargar/DAPS/blob/main/torch-conformal/gnn_cp/models/model_manager.py
+
 class Graph_Trainer:
 
     def __init__(self, model, **kwargs):
-
         self.model = model
         self.loss_module = nn.CrossEntropyLoss()
 
@@ -247,40 +249,66 @@ class Graph_Trainer:
 
         return optimizer
 
-    def fit(self, data, train_mask, valid_mask, n_epochs):
+    def fit(self, data, train_mask, valid_mask, save_flag, **kwargs):
         x, edge_index, y = data.x, data.edge_index, data.y
         #Set the model to train mode
         self.model.train()
 
+        warm_up = kwargs.get("warm_up", True)
+        warm_up_epochs = kwargs.get("warm_up_epochs", 50)
+        n_epochs = kwargs.get("n_epochs", 200)
+        patience = kwargs.get("patience", 10)
+        verbose = kwargs.get("verbose", True)
+
+        self.patience = 10
+        self.warm_up = 50
+
+        #Set the model to training
+        self.model.train().to(self.device)
+
+        #Keep track of the validation loss
+        validation_loss = []
+
+        #Do a warmup in case the boolean flag was set
+        if warm_up:
+            for warm_up_epoch in range(warm_up_epochs):
+                _, _, _ = self._train(x, edge_index, y, train_mask, valid_mask)
+
         for epoch in range(1, n_epochs+1):
             #We train full batch
-
             #Log every 10 steps
-            if epoch % 10 == 0 or epoch == 1:
+            if verbose and (epoch % 10 == 0 or epoch == 1):
                 print(f'Epoch {epoch:3d} - ', end='')
 
-            self.model.train().to(self.device)
-            y_pred = self.model(x.to(self.device), edge_index.to(self.device)).cpu()
-            y_pred_train, y_pred_valid = y_pred[train_mask], y_pred[valid_mask]
-            y_true_train, y_true_valid = y[train_mask], y[valid_mask]
+            loss_train, loss_valid, accuracy_train = self._train(x, edge_index, y, train_mask, valid_mask)
 
-            #Calculate the loss
-            loss_train = self.loss_module(y_pred_train, y_true_train)
-            accuracy_train = self._get_accuracy(y_pred_train, y_true_train)
+            # #ToDo Implement patience and
+            # # Patience and early stopping
 
-            #Calculate if we start to overfit
-            #ToDo Implement patience and
-            # Patience and early stopping
+            if verbose and (epoch % 10 == 0 or epoch == 1):
+                print(f'loss: {float(loss_train):.4f}\tacc: {accuracy_train:.4f}')
 
-            #Zero gradients, perform backward pass and update the weights
-            self.optimizer.zero_grad()
-            loss_train.backward()
-            self.optimizer.step()
+    def _train(self, x, edge_index, y, train_mask, valid_mask):
+        """
+        Performs an iteration of the training
+        """
+        y_pred = self.model(x.to(self.device), edge_index.to(self.device)).cpu()
+        y_pred_train, y_pred_valid = y_pred[train_mask], y_pred[valid_mask]
+        y_true_train, y_true_valid = y[train_mask], y[valid_mask]
 
-            loss = float(loss_train)
+        # Calculate the loss
+        loss_train = self.loss_module(y_pred_train, y_true_train)
+        loss_valid = self.loss_module(y_pred_valid, y_true_valid)
 
-            if epoch % 10 == 0 or epoch == 1:
-                print(f'loss: {loss:.4f}\tacc: {accuracy_train:.4f}')
+        #Calculate the accuracies
+        accuracy_train = self._get_accuracy(y_pred_train, y_true_train)
+
+        # Zero gradients, perform backward pass and update the weights
+        self.optimizer.zero_grad()
+        loss_train.backward()
+        self.optimizer.step()
+
+        return loss_train, loss_valid, accuracy_train
 
     def _get_accuracy(self, y_pred, y_true):
         return torch.mean((torch.argmax(y_pred, dim=-1) == y_true).float(), dim=0)
