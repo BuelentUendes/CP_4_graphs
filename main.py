@@ -8,10 +8,12 @@ import warnings
 warnings.filterwarnings("ignore")
 import os
 
-# Import the helper functions that are needed
-from utils.helper_path import DATA_PATH, CONFIG_PATH
-from utils.helper import get_data, DataManager, Graph_Trainer, load_yaml_config_file, get_model, seed_everything
+#Import standard
+import torch
 
+# Import the helper functions that are needed
+from utils.helper_path import DATA_PATH, CONFIG_PATH, MODELS_PATH
+from utils.helper import get_data, DataManager, Graph_Trainer, load_yaml_config_file, get_model, seed_everything, create_directory
 
 #Import library for allowing terminal commands
 import argparse
@@ -57,10 +59,23 @@ def main(args):
                                                                                                   percentage_tuning_data=0.5)
         #Train each model
         for model_type in args.model:
+
             model = get_model(model_type, num_features, num_classes, **model_config["models_config"][model_type])
             graph_trainer = Graph_Trainer(model, **training_config["training_protocols"][model_type])
-            graph_trainer.fit(dataset, true_train_idx, true_tuning_idx, args.save_model, **training_config["training_protocols"][model_type])
+            graph_trainer.fit(dataset, true_train_idx, true_tuning_idx, **training_config["training_protocols"][model_type])
             graph_trainer.test(dataset, test_idx)
+
+            if args.save_model:
+                save_name = f'{model_type}_{args.random_seed}.pt'
+                #Create the folder to save the models
+                save_location = os.path.join(MODELS_PATH, dataset_name)
+                create_directory(save_location)
+                graph_trainer.save_model(save_location, save_name)
+
+                #Check model loading:
+                model_new = get_model(model_type, num_features, num_classes, **model_config["models_config"][model_type])
+                model_new.load_state_dict(torch.load(os.path.join(save_location, save_name)))
+
 
 if __name__ == "__main__":
 

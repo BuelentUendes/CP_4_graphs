@@ -7,7 +7,7 @@ from ogb.nodeproppred import PygNodePropPredDataset
 from src.models import GCN, GAT, SAGE, APPNPNet
 import torch.optim as optim
 from torch_geometric.utils import homophily
-from utils.helper_path import DATA_PATH
+from utils.helper_path import DATA_PATH, MODELS_PATH
 import os
 import random
 import numpy as np
@@ -249,7 +249,7 @@ class Graph_Trainer:
 
         return optimizer
 
-    def fit(self, data, train_mask, valid_mask, save_flag, **kwargs):
+    def fit(self, data, train_mask, valid_mask, **kwargs):
         x, edge_index, y = data.x, data.edge_index, data.y
         #Set the model to train mode
         self.model.train()
@@ -257,36 +257,59 @@ class Graph_Trainer:
         warm_up = kwargs.get("warm_up", True)
         warm_up_epochs = kwargs.get("warm_up_epochs", 50)
         n_epochs = kwargs.get("n_epochs", 200)
-        patience = kwargs.get("patience", 10)
+        self.early_stopping = kwargs.get("early_stopping", False)
+        self.patience = kwargs.get("patience", 10)
         verbose = kwargs.get("verbose", True)
 
-        self.patience = 10
         self.warm_up = 50
 
         #Set the model to training
         self.model.train().to(self.device)
 
-        #Keep track of the validation loss
-        validation_loss = []
+        #Keep track of the best validation loss so far -> we minimize!
+        best_validation_loss = 1000
 
         #Do a warmup in case the boolean flag was set
         if warm_up:
             for warm_up_epoch in range(warm_up_epochs):
-                _, _, _ = self._train(x, edge_index, y, train_mask, valid_mask)
+                _, loss_valid, _ = self._train(x, edge_index, y, train_mask, valid_mask)
+
+                #Keep track of the best validation loss so far
+                if loss_valid < best_validation_loss:
+                    best_validation_loss = loss_valid
 
         for epoch in range(1, n_epochs+1):
             #We train full batch
             #Log every 10 steps
-            if verbose and (epoch % 10 == 0 or epoch == 1):
+            if verbose and (epoch % 1 == 0 or epoch == 1):
                 print(f'Epoch {epoch:3d} - ', end='')
 
             loss_train, loss_valid, accuracy_train = self._train(x, edge_index, y, train_mask, valid_mask)
 
-            # #ToDo Implement patience and
-            # # Patience and early stopping
+            # Early stopping based on validation loss, if the validation loss does not decrease in 10 consecutive epochs we break
+            if self.early_stopping:
+                if loss_valid < best_validation_loss:
+                    best_validation_loss = loss_valid
+                    #Save the best checkpoint so far
+                    self.best_checkpoint = self.model.state_dict()
+                    #Reset the patience score
+                    self.patience = kwargs.get("patience", 10)
+                else:
+                    self.patience -= 1
 
-            if verbose and (epoch % 10 == 0 or epoch == 1):
-                print(f'loss: {float(loss_train):.4f}\tacc: {accuracy_train:.4f}')
+            if verbose and (epoch % 1 == 0 or epoch == 1):
+                print(f'train_loss: {float(loss_train):.4f}\ttrain_acc: {accuracy_train:.4f}\tvalid_loss: {loss_valid:.4f}')
+
+            if self.patience == 0:
+                print(f'Training is stopped as the model has not improved the validation loss in the past {kwargs.get("patience")} epochs!')
+                #If the model has not improved the past patience steps, then we stop training
+                break
+
+    def save_model(self, directory, save_name):
+        if self.early_stopping:
+            self.model.load_state_dict(self.best_checkpoint)
+
+        torch.save(self.model.state_dict(), os.path.join(directory, save_name))
 
     def _train(self, x, edge_index, y, train_mask, valid_mask):
         """
