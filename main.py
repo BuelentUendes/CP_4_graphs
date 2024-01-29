@@ -15,6 +15,9 @@ import torch
 from utils.helper_path import DATA_PATH, CONFIG_PATH, MODELS_PATH
 from utils.helper import get_data, DataManager, Graph_Trainer, load_yaml_config_file, get_model, seed_everything, create_directory
 
+from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, \
+    get_singleton_hit_ratio, get_efficiency, get_coverage
+
 #Import library for allowing terminal commands
 import argparse
 
@@ -76,17 +79,42 @@ def main(args):
                 model_new = get_model(model_type, num_features, num_classes, **model_config["models_config"][model_type])
                 model_new.load_state_dict(torch.load(os.path.join(save_location, save_name)))
 
+                #Get the conformer now
+                threshold_conformer = Threshold_Conformer(0.05, model_new, dataset, true_calibration_idx)
+                threshold_prediction_sets = threshold_conformer.get_prediction_sets(test_idx)
+                adaptive_conformer = Adaptive_Conformer(0.05, model_new, dataset, true_calibration_idx)
+                adaptive_prediction_sets = adaptive_conformer.get_prediction_sets(test_idx)
+
+                #Get the performance metrics
+                empirical_coverage_threshold = get_coverage(threshold_prediction_sets,  dataset, test_idx, 0.05, len(true_calibration_idx))
+                empirical_coverage_adaptive = get_coverage(adaptive_prediction_sets,  dataset, test_idx, 0.05, len(true_calibration_idx))
+
+                singleton_hit_ratio_threshold = get_singleton_hit_ratio(threshold_prediction_sets, dataset, test_idx)
+                efficiency_threshold = get_efficiency(threshold_prediction_sets)
+
+                singleton_hit_ratio_adaptive = get_singleton_hit_ratio(adaptive_prediction_sets, dataset, test_idx)
+                efficiency_adaptive = get_efficiency(adaptive_prediction_sets)
+
+                print(f"The empirical coverage for threshold is {empirical_coverage_threshold}")
+                print(f"The empirical coverage for adaptive is {empirical_coverage_adaptive}")
+
+                print(f"The singleton hit ratio threshold is {singleton_hit_ratio_threshold}")
+                print(f"The efficiency for threshold is {efficiency_threshold}")
+
+                print(f"The singleton hit ratio adaptive is {singleton_hit_ratio_adaptive}")
+                print(f"The efficiency for adaptive is {efficiency_adaptive}")
+
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Cora")
+    parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Pubmed")
     parser.add_argument("--model", help="Specify which model(s) you want to train and use", type=parse_model, default="GCN")
     parser.add_argument("--random_seed", help="Specify the seed", type=int, default=7)
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--training_config_file", help="name of the training config_file", default="training_config_file.yaml", type=str)
-    parser.add_argument("--save_model", help="Boolean flag indicating if model should be saved", action="store_true")
+    parser.add_argument("--save_model", help="Boolean flag indicating if model should be saved", action="store_false")
 
     #We add the homophile argument. However, this is only used for the MixHop dataset
     parser.add_argument("--homophily", help="Level of homophily. This is only used for the 'Mixhop' dataset."
@@ -97,16 +125,28 @@ if __name__ == "__main__":
     #Start training
     main(args)
 
-#ToDo: 25.01.2024
+
+#ToDo 29.01.2024:
+# Write split conformal prediction
+# Adaptive split conformal prediction
+# Siglehit and efficiency
+# Tune -> most results are not as good as the benchmarks as reported!
+
+
+
+
+
+#ToDo: 26.01.2024
+# Check in place to(self.device) is not inplace!
+# Vectorize to make it a sparse matrix!
+
+# Store results across architectures and seeds and average them and get the average and standard deviation performance
 # Synthetic Cora -> Gradient-Gating for DEEP-MULTI RATE Learning on Graphs
 # Write conformal prediction split procedure
-# Train and save checkpoints for models -> early stoppin on validation loss!
 # Write the diffusion score procedure
 # Write performance metric scores; singlehit and efficiency
 # Look into setup.py/toml installation script
 
-# Start the presentation!
-#
 
 
 
