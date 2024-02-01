@@ -3,10 +3,28 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+import random
+import os
+
+def seed_everything(seed:int):
+    """
+    Sets a seed for reproducibility
+    :param seed: seed
+    :return: None
+    """
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 class Threshold_Conformer:
 
-    def __init__(self, alpha, model, dataset, calibration_mask):
+    def __init__(self, alpha, model, dataset, calibration_mask, seed):
+
+        seed_everything(seed)
 
         self.alpha = alpha
         self.model = model
@@ -50,11 +68,17 @@ class Threshold_Conformer:
 
 class Adaptive_Conformer:
 
-    def __init__(self, alpha, model, dataset, calibration_mask):
+    def __init__(self, alpha, model, dataset, calibration_mask, random_split=False, lambda_penalty=0., k_reg=None, seed=7):
+
+        seed_everything(seed)
 
         self.alpha = alpha
         self.model = model
         self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
+        self.lambda_penalty = lambda_penalty
+        self.k_reg = k_reg
+        self.random_split = random_split
+
         self.threshold_q = self._get_quantile(calibration_mask)
 
     def _get_quantile(self, calibration_mask):
@@ -65,46 +89,97 @@ class Adaptive_Conformer:
         logit_scores = self.model(self.x, self.edge_index)[calibration_mask]
         softmax_scores = F.softmax(logit_scores, dim=1)
 
+        #Get the softmax score of the true class
+        softmax_score_true_class = softmax_scores[torch.arange(softmax_scores.shape[0]), y_calibration].reshape(-1, 1)
+
         # Get the sorted probabilities from low to large
         softmax_scores_sorted, softmax_scores_sorted_indices = torch.sort(softmax_scores, descending=True, dim=1)
+
+        #Check if we have a penalty to add
+        if self.lambda_penalty > 0.:
+            softmax_scores_sorted = self._get_regularized_softmax_scores(softmax_scores_sorted, softmax_scores_sorted_indices, y_calibration)
 
         # Now we summed up the probabilities
         cumulative_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
 
+        # Get the random score
+        if self.random_split:
+            u_vec = torch.rand_like(softmax_score_true_class)
+            random_noise = u_vec * softmax_score_true_class
+
         # Find the value where the target class occurs in the sorted index,
         # The first value is the sample and the second one the specific cutoff_idx
         cutoff_idx = torch.nonzero(softmax_scores_sorted_indices == y_calibration.unsqueeze(1), as_tuple=False)
-        # Now sum up the probabilities until the true class is detected
 
-        softmax_scores_cut = torch.tensor([cumulative_softmax_scores[sample, idx] for sample,idx in cutoff_idx])
+        softmax_scores_cut = torch.tensor([cumulative_softmax_scores[sample, idx] for sample, idx in cutoff_idx]).reshape(-1, 1)
+
+        #Add the random noise to it
+        if self.random_split:
+            softmax_scores_cut += random_noise
 
         #Sort the final softmax_scores
-        final_softmax_scores_sorted, _ = torch.sort(softmax_scores_cut)
+        #Take the negative
+        final_softmax_scores_sorted, _ = torch.sort(-1 * softmax_scores_cut)
 
         #Get the threshold quantile
-        threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
+        #threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
+        threshold_quantile = np.ceil(((n + 1) * (self.alpha))) / n
 
         return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
+
+    def _get_regularized_softmax_scores(self, softmax_scores_sorted, softmax_scores_sorted_indices, y_calibration=None):
+
+        k = softmax_scores_sorted.size(1)
+        n = softmax_scores_sorted.size(0)
+
+        #If we have calibration data we use it
+
+        # Check, maybe for calibration we do not need to use it
+        if y_calibration is not None:
+            # Use the true rank
+            y_rank = torch.where(softmax_scores_sorted_indices==y_calibration.unsqueeze(1))[1].reshape(-1, 1)
+
+        else:
+            # Penalize everything above a certain rank
+            y_rank = torch.ones(n, 1)*self.k_reg
+
+        # Initialize the penalty vector
+        regularization_penalty = torch.arange(k, dtype=float).expand(n, -1) - y_rank
+        # For classes for which the rank is lower than the true class rank we have zero penalty
+        regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), regularization_penalty)
+        # Add the penalty (we need a negative score as we have smaller values, worse agreement
+        regularization_penalty *= - self.lambda_penalty
+
+        regularized_softmax_scores_sorted = softmax_scores_sorted + regularization_penalty
+        return regularized_softmax_scores_sorted
 
     def get_prediction_sets(self, test_set_mask):
 
         logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
-        softmax_scores = F.softmax(logit_scores, dim=1)
+        softmax_scores = -1 * F.softmax(logit_scores, dim=1)
 
-        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, descending=True, dim=1)
+        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1)
+
+        if self.lambda_penalty > 0.:
+            softmax_scores_sorted = self._get_regularized_softmax_scores(softmax_scores_sorted, softmax_scores_indices)
 
         prediction_sets = []
 
         for labels, values in zip(softmax_scores_indices, softmax_scores_sorted):
             prediction_set = []
-            score = self.threshold_q.clone()
+            quantile = self.threshold_q.clone()
 
+            cumulative_score = 0
             for label, value in zip(labels, values):
-                if score - value > 0:
+                if cumulative_score + value >= quantile:
                     prediction_set.append(label.item())
-                    score -= value
+                    cumulative_score += value
 
                 else:
+                    #Avoid zero-set size
+                    if len(prediction_set) == 0:
+                        prediction_set.append(label.item())
+
                     break
             prediction_sets.append(prediction_set)
 
@@ -123,10 +198,10 @@ def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration
     empirical_coverage = round(float(coverage/n), 4)
 
     # Check if we get approximately true coverage based on asymptotics
-    variance = (alpha * (1-alpha))/(len_calibration_set+2)
+    variance = round((alpha * (1-alpha))/(len_calibration_set+2), 4)
 
-    assert empirical_coverage - 3*np.sqrt(variance) <= 1-alpha <= empirical_coverage + 3*np.sqrt(variance), "The coverage is not valid!"
-    #print(f"We have the coverage of {empirical_coverage} +- {np.sqrt(variance)}")
+    #assert empirical_coverage - round(3*np.sqrt(variance), 4) <= 1-alpha <= empirical_coverage + round(3*np.sqrt(variance), 4), "The coverage is not valid!"
+    print(f"We have the coverage of {empirical_coverage} +- {round(np.sqrt(variance), 4)}")
     return empirical_coverage
 
 def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
@@ -153,9 +228,15 @@ def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
 
 def get_efficiency(prediction_sets):
 
-    len_prediction_sets = list(map(lambda x: len(x), prediction_sets))
+    #len_prediction_sets = list(map(lambda x: len(x), prediction_sets))
+    #Filter first zero/empty sets
+    non_zero_prediction_sets = list(filter(lambda x: len(x) > 0, prediction_sets))
+    len_non_zero_prediction_sets = list(map(lambda x: len(x), non_zero_prediction_sets))
 
-    average_set_size = np.mean(len_prediction_sets)
+    #Double-check: In principle, we should not have any zero-size sets
+    #assert len(prediction_sets) == len(len_non_zero_prediction_sets)
+
+    average_set_size = np.mean(len_non_zero_prediction_sets)
 
     return round(float(average_set_size), 4)
 

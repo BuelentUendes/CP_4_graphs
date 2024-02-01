@@ -80,14 +80,20 @@ def main(args):
                 model_new.load_state_dict(torch.load(os.path.join(save_location, save_name)))
 
                 #Get the conformer now
-                threshold_conformer = Threshold_Conformer(0.05, model_new, dataset, true_calibration_idx)
+                alpha = 0.10
+                threshold_conformer = Threshold_Conformer(alpha, model_new, dataset, true_calibration_idx, seed=args.random_seed)
                 threshold_prediction_sets = threshold_conformer.get_prediction_sets(test_idx)
-                adaptive_conformer = Adaptive_Conformer(0.05, model_new, dataset, true_calibration_idx)
+                adaptive_conformer = Adaptive_Conformer(alpha, model_new, dataset, true_calibration_idx, lambda_penalty=0., k_reg=2, seed=args.random_seed)
                 adaptive_prediction_sets = adaptive_conformer.get_prediction_sets(test_idx)
 
+                regularized_conformer = Adaptive_Conformer(alpha, model_new, dataset, true_calibration_idx, lambda_penalty=0.02, k_reg=0, seed=args.random_seed)
+                regularized_prediction_sets = regularized_conformer.get_prediction_sets(test_idx)
+
                 #Get the performance metrics
-                empirical_coverage_threshold = get_coverage(threshold_prediction_sets,  dataset, test_idx, 0.05, len(true_calibration_idx))
-                empirical_coverage_adaptive = get_coverage(adaptive_prediction_sets,  dataset, test_idx, 0.05, len(true_calibration_idx))
+                empirical_coverage_threshold = get_coverage(threshold_prediction_sets, dataset, test_idx, alpha, len(true_calibration_idx))
+                empirical_coverage_adaptive = get_coverage(adaptive_prediction_sets, dataset, test_idx, alpha, len(true_calibration_idx))
+                empirical_coverage_regularized = get_coverage(regularized_prediction_sets, dataset, test_idx, alpha,
+                                                           len(true_calibration_idx))
 
                 singleton_hit_ratio_threshold = get_singleton_hit_ratio(threshold_prediction_sets, dataset, test_idx)
                 efficiency_threshold = get_efficiency(threshold_prediction_sets)
@@ -95,8 +101,12 @@ def main(args):
                 singleton_hit_ratio_adaptive = get_singleton_hit_ratio(adaptive_prediction_sets, dataset, test_idx)
                 efficiency_adaptive = get_efficiency(adaptive_prediction_sets)
 
+                singleton_hit_ratio_regularized = get_singleton_hit_ratio(regularized_prediction_sets, dataset, test_idx)
+                efficiency_regularized = get_efficiency(regularized_prediction_sets)
+
                 print(f"The empirical coverage for threshold is {empirical_coverage_threshold}")
                 print(f"The empirical coverage for adaptive is {empirical_coverage_adaptive}")
+                print(f"The empirical coverage for regularized is {empirical_coverage_regularized}")
 
                 print(f"The singleton hit ratio threshold is {singleton_hit_ratio_threshold}")
                 print(f"The efficiency for threshold is {efficiency_threshold}")
@@ -104,14 +114,16 @@ def main(args):
                 print(f"The singleton hit ratio adaptive is {singleton_hit_ratio_adaptive}")
                 print(f"The efficiency for adaptive is {efficiency_adaptive}")
 
+                print(f"The singleton hit ratio regularized is {singleton_hit_ratio_regularized}")
+                print(f"The efficiency for regularized is {efficiency_regularized}")
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Pubmed")
+    parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Cora")
     parser.add_argument("--model", help="Specify which model(s) you want to train and use", type=parse_model, default="GCN")
-    parser.add_argument("--random_seed", help="Specify the seed", type=int, default=7)
+    parser.add_argument("--random_seed", help="Specify the seed", type=int, default=5)
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--training_config_file", help="name of the training config_file", default="training_config_file.yaml", type=str)
     parser.add_argument("--save_model", help="Boolean flag indicating if model should be saved", action="store_false")
@@ -125,15 +137,15 @@ if __name__ == "__main__":
     #Start training
     main(args)
 
+#ToDo: 31.01.2024
+# Write RAPS
+# Write DAPS
 
 #ToDo 29.01.2024:
-# Write split conformal prediction
-# Adaptive split conformal prediction
-# Siglehit and efficiency
+# Write split conformal prediction -> Done!
+# Adaptive split conformal prediction -> Done!
+# Siglehit and efficiency -> Done!
 # Tune -> most results are not as good as the benchmarks as reported!
-
-
-
 
 
 #ToDo: 26.01.2024
