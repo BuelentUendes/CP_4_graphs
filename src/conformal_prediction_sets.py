@@ -40,29 +40,33 @@ class Threshold_Conformer:
         softmax_scores = F.softmax(logit_scores, dim=1)
 
         uncertainty_scores = 1 - softmax_scores
-
         true_label_indices = torch.arange(len(y_calibration))
-
         uncertainty_scores_true_label = uncertainty_scores[true_label_indices, y_calibration]
 
-        #uncertainty_scores_sorted, _ = torch.sort(uncertainty_scores_true_label)
-        # With uncertainty score
         threshold_quantile = np.ceil(((n+1)*(1-self.alpha)))/n
 
         #Calculate the variance to make sure  we are still in the bounds
         self.variance = (self.alpha * (1-self.alpha))/(n+2)
 
-        return torch.quantile(uncertainty_scores_true_label, threshold_quantile)
+        #Sort the uncertainty scores from low to large
+        uncertainty_scores_true_label_sorted = torch.sort(uncertainty_scores_true_label, descending=False)[0]
+
+        return torch.quantile(uncertainty_scores_true_label_sorted, threshold_quantile, interpolation='higher')
 
     def get_prediction_sets(self, test_set_mask):
 
         logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
         softmax_scores = F.softmax(logit_scores, dim=-1)
+        uncertainty_scores = 1 - softmax_scores
+
+        #Get a mask to check which predictions are below the threshold
+        uncertainty_scores_below_threshold = uncertainty_scores <= self.threshold_q
 
         #Get a mask for all predictions that manage to get over the threshold
-        softmax_above_threshold = softmax_scores >= 1 - self.threshold_q
+        #softmax_above_threshold = softmax_scores >= 1 - self.threshold_q
 
-        self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in softmax_above_threshold]
+        self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in uncertainty_scores_below_threshold]
+        #self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in softmax_above_threshold]
 
         return self.prediction_sets
 
@@ -92,7 +96,7 @@ class Adaptive_Conformer:
         #Get the softmax score of the true class
         softmax_score_true_class = softmax_scores[torch.arange(softmax_scores.shape[0]), y_calibration].reshape(-1, 1)
 
-        # Get the sorted probabilities from low to large
+        # Get the sorted probabilities from large to low
         softmax_scores_sorted, softmax_scores_sorted_indices = torch.sort(softmax_scores, descending=True, dim=1)
 
         #Check if we have a penalty to add
