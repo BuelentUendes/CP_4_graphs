@@ -45,6 +45,9 @@ class Threshold_Conformer:
 
         threshold_quantile = np.ceil(((n+1)*(1-self.alpha)))/n
 
+        #Clip the trehsold quantile to avoid runtime errors
+        threshold_quantile = np.clip(threshold_quantile, 0., 1.)
+
         #Calculate the variance to make sure  we are still in the bounds
         self.variance = (self.alpha * (1-self.alpha))/(n+2)
 
@@ -128,6 +131,8 @@ class Adaptive_Conformer:
         #Get the threshold quantile
         #threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
         threshold_quantile = np.ceil(((n + 1) * (self.alpha))) / n
+        #Clamp the threshold quantile to avoid runtime errors
+        threshold_quantile = np.clip(threshold_quantile, 0.0, 1.0)
 
         return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
 
