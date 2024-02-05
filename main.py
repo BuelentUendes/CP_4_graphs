@@ -80,19 +80,20 @@ def main(args):
                 model_new.load_state_dict(torch.load(os.path.join(save_location, save_name)))
 
                 #Get the conformer now
-                alpha = 0.10
-                threshold_conformer = Threshold_Conformer(alpha, model_new, dataset, true_calibration_idx, seed=args.random_seed)
+                threshold_conformer = Threshold_Conformer(args.alpha, model_new, dataset, true_calibration_idx, seed=args.random_seed)
                 threshold_prediction_sets = threshold_conformer.get_prediction_sets(test_idx)
-                adaptive_conformer = Adaptive_Conformer(alpha, model_new, dataset, true_calibration_idx, lambda_penalty=0., k_reg=2, seed=args.random_seed)
+                adaptive_conformer = Adaptive_Conformer(args.alpha, model_new, dataset, true_calibration_idx, random_split=args.random_split,
+                                                        lambda_penalty=0., k_reg=2, seed=args.random_seed)
                 adaptive_prediction_sets = adaptive_conformer.get_prediction_sets(test_idx)
 
-                regularized_conformer = Adaptive_Conformer(alpha, model_new, dataset, true_calibration_idx, lambda_penalty=0.02, k_reg=0, seed=args.random_seed)
+                regularized_conformer = Adaptive_Conformer(args.alpha, model_new, dataset, true_calibration_idx, random_split=args.random_split,
+                                                           lambda_penalty=1., k_reg=2, seed=args.random_seed)
                 regularized_prediction_sets = regularized_conformer.get_prediction_sets(test_idx)
 
                 #Get the performance metrics
-                empirical_coverage_threshold = get_coverage(threshold_prediction_sets, dataset, test_idx, alpha, len(true_calibration_idx))
-                empirical_coverage_adaptive = get_coverage(adaptive_prediction_sets, dataset, test_idx, alpha, len(true_calibration_idx))
-                empirical_coverage_regularized = get_coverage(regularized_prediction_sets, dataset, test_idx, alpha,
+                empirical_coverage_threshold = get_coverage(threshold_prediction_sets, dataset, test_idx, args.alpha, len(true_calibration_idx))
+                empirical_coverage_adaptive = get_coverage(adaptive_prediction_sets, dataset, test_idx, args.alpha, len(true_calibration_idx))
+                empirical_coverage_regularized = get_coverage(regularized_prediction_sets, dataset, test_idx, args.alpha,
                                                            len(true_calibration_idx))
 
                 singleton_hit_ratio_threshold = get_singleton_hit_ratio(threshold_prediction_sets, dataset, test_idx)
@@ -127,18 +128,22 @@ if __name__ == "__main__":
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--training_config_file", help="name of the training config_file", default="training_config_file.yaml", type=str)
     parser.add_argument("--save_model", help="Boolean flag indicating if model should be saved", action="store_false")
+    parser.add_argument("--alpha", help="alpha value for the conformal prediction. 1-alpha is the coverage that one wants to achieve",
+                        type=float, default=0.10)
+    parser.add_argument("--random_split", help="Boolean indicating if we want to randomly split. Default True", action="store_false")
 
     #We add the homophile argument. However, this is only used for the MixHop dataset
     parser.add_argument("--homophily", help="Level of homophily. This is only used for the 'Mixhop' dataset."
                                             "Needs to be in range [0.0 - 0.9]", default=0.6, type=float)
 
     args = parser.parse_args()
+    print(args.random_split)
 
     #Start training
     main(args)
 
 #ToDo: 31.01.2024
-# Write RAPS
+# Write RAPS -> Done! -> Double-check the logic!
 # Write DAPS
 
 #ToDo 29.01.2024:

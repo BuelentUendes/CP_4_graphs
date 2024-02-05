@@ -20,6 +20,8 @@ def seed_everything(seed:int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
+#ToDo: Push to device!
+
 class Threshold_Conformer:
 
     def __init__(self, alpha, model, dataset, calibration_mask, seed):
@@ -65,11 +67,7 @@ class Threshold_Conformer:
         #Get a mask to check which predictions are below the threshold
         uncertainty_scores_below_threshold = uncertainty_scores <= self.threshold_q
 
-        #Get a mask for all predictions that manage to get over the threshold
-        #softmax_above_threshold = softmax_scores >= 1 - self.threshold_q
-
         self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in uncertainty_scores_below_threshold]
-        #self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in softmax_above_threshold]
 
         return self.prediction_sets
 
@@ -109,10 +107,6 @@ class Adaptive_Conformer:
         # Now we summed up the probabilities
         cumulative_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
 
-        # Get the random score
-        if self.random_split:
-            u_vec = torch.rand_like(softmax_score_true_class)
-            random_noise = u_vec * softmax_score_true_class
 
         # Find the value where the target class occurs in the sorted index,
         # The first value is the sample and the second one the specific cutoff_idx
@@ -120,18 +114,21 @@ class Adaptive_Conformer:
 
         softmax_scores_cut = torch.tensor([cumulative_softmax_scores[sample, idx] for sample, idx in cutoff_idx]).reshape(-1, 1)
 
-        #Add the random noise to it
+        # Get the random score
         if self.random_split:
-            softmax_scores_cut += random_noise
+            u_vec = torch.rand_like(softmax_score_true_class)
+            ##Add the random noise to it (and subtract the softmax_true_class as we previously included it)
+            # v * softmax -1 * softmax = (v-1) softmax_true_class
+            softmax_scores_cut += (u_vec-1) * softmax_score_true_class
+            random_noise = u_vec * softmax_score_true_class
+            softmax_scores_cut += random_noise - softmax_score_true_class
 
         #Sort the final softmax_scores
-        #Take the negative
-        final_softmax_scores_sorted, _ = torch.sort(-1 * softmax_scores_cut)
+        final_softmax_scores_sorted, _ = torch.sort(softmax_scores_cut, descending=True)
 
         #Get the threshold quantile
-        #threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
-        threshold_quantile = np.ceil(((n + 1) * (self.alpha))) / n
-        #Clamp the threshold quantile to avoid runtime errors
+        threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
+
         threshold_quantile = np.clip(threshold_quantile, 0.0, 1.0)
 
         return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
@@ -143,7 +140,6 @@ class Adaptive_Conformer:
 
         #If we have calibration data we use it
 
-        # Check, maybe for calibration we do not need to use it
         if y_calibration is not None:
             # Use the true rank
             y_rank = torch.where(softmax_scores_sorted_indices==y_calibration.unsqueeze(1))[1].reshape(-1, 1)
@@ -152,12 +148,12 @@ class Adaptive_Conformer:
             # Penalize everything above a certain rank
             y_rank = torch.ones(n, 1)*self.k_reg
 
+
         # Initialize the penalty vector
         regularization_penalty = torch.arange(k, dtype=float).expand(n, -1) - y_rank
+
         # For classes for which the rank is lower than the true class rank we have zero penalty
-        regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), regularization_penalty)
-        # Add the penalty (we need a negative score as we have smaller values, worse agreement
-        regularization_penalty *= - self.lambda_penalty
+        regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), self.lambda_penalty)
 
         regularized_softmax_scores_sorted = softmax_scores_sorted + regularization_penalty
         return regularized_softmax_scores_sorted
@@ -165,31 +161,26 @@ class Adaptive_Conformer:
     def get_prediction_sets(self, test_set_mask):
 
         logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
-        softmax_scores = -1 * F.softmax(logit_scores, dim=1)
+        softmax_scores = F.softmax(logit_scores, dim=1)
 
-        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1)
+        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1, descending=True)
 
         if self.lambda_penalty > 0.:
             softmax_scores_sorted = self._get_regularized_softmax_scores(softmax_scores_sorted, softmax_scores_indices)
 
         prediction_sets = []
 
-        for labels, values in zip(softmax_scores_indices, softmax_scores_sorted):
-            prediction_set = []
-            quantile = self.threshold_q.clone()
+        # #I can use torch.cumsum() and filter again here!
+        cumulated_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
 
-            cumulative_score = 0
-            for label, value in zip(labels, values):
-                if cumulative_score + value >= quantile:
-                    prediction_set.append(label.item())
-                    cumulative_score += value
+        for cumulative_scores, softmax_scores_index in zip(cumulated_softmax_scores, softmax_scores_indices):
+            try:
+                cutoff_idx = torch.nonzero(cumulative_scores < self.threshold_q, as_tuple=False)[-1]
+                prediction_set = softmax_scores_index[:min(len(softmax_scores_index), cutoff_idx + 1)].tolist()
 
-                else:
-                    #Avoid zero-set size
-                    if len(prediction_set) == 0:
-                        prediction_set.append(label.item())
+            except IndexError: #if all values are above the threshold, then I do have an empty set and I will return the first value above it
+                prediction_set = [softmax_scores_index[0].item()]
 
-                    break
             prediction_sets.append(prediction_set)
 
         return prediction_sets
@@ -237,13 +228,9 @@ def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
 
 def get_efficiency(prediction_sets):
 
-    #len_prediction_sets = list(map(lambda x: len(x), prediction_sets))
     #Filter first zero/empty sets
     non_zero_prediction_sets = list(filter(lambda x: len(x) > 0, prediction_sets))
     len_non_zero_prediction_sets = list(map(lambda x: len(x), non_zero_prediction_sets))
-
-    #Double-check: In principle, we should not have any zero-size sets
-    #assert len(prediction_sets) == len(len_non_zero_prediction_sets)
 
     average_set_size = np.mean(len_non_zero_prediction_sets)
 
