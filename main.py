@@ -15,7 +15,7 @@ import torch
 from utils.helper_path import DATA_PATH, CONFIG_PATH, MODELS_PATH
 from utils.helper import get_data, DataManager, Graph_Trainer, load_yaml_config_file, get_model, seed_everything, create_directory
 
-from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, \
+from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, DAPS, \
     get_singleton_hit_ratio, get_efficiency, get_coverage
 
 #Import library for allowing terminal commands
@@ -53,7 +53,16 @@ def main(args):
 
         num_features = dataset.x.shape[1]
         num_classes = len(dataset.y.unique())
+        num_nodes = dataset.x.shape[0]
 
+        #Create an adjacency matrix
+        A = torch.sparse.FloatTensor(
+            dataset.edge_index,
+            torch.ones(dataset.edge_index.shape[1]),
+            (num_nodes, num_nodes)
+        )
+
+        D = torch.matmul(A, torch.ones((A.shape[0])))
         datamanager = DataManager(dataset, random_seed=args.random_seed)
         #Get train test split
         train_idx, test_idx = datamanager.get_train_test_split()
@@ -79,6 +88,10 @@ def main(args):
                 model_new = get_model(model_type, num_features, num_classes, **model_config["models_config"][model_type])
                 model_new.load_state_dict(torch.load(os.path.join(save_location, save_name)))
 
+                #Get the DAPS
+                daps_conformer = DAPS(args.alpha, model_new, dataset, true_calibration_idx, seed=args.random_seed, neighborhood_coefficient=0.1)
+                daps_prediction_sets = daps_conformer.get_prediction_sets(test_idx)
+
                 #Get the conformer now
                 threshold_conformer = Threshold_Conformer(args.alpha, model_new, dataset, true_calibration_idx, seed=args.random_seed)
                 threshold_prediction_sets = threshold_conformer.get_prediction_sets(test_idx)
@@ -87,7 +100,7 @@ def main(args):
                 adaptive_prediction_sets = adaptive_conformer.get_prediction_sets(test_idx)
 
                 regularized_conformer = Adaptive_Conformer(args.alpha, model_new, dataset, true_calibration_idx, random_split=args.random_split,
-                                                           lambda_penalty=1., k_reg=2, seed=args.random_seed)
+                                                           lambda_penalty=0., k_reg=1, seed=args.random_seed)
                 regularized_prediction_sets = regularized_conformer.get_prediction_sets(test_idx)
 
                 #Get the performance metrics
@@ -95,6 +108,8 @@ def main(args):
                 empirical_coverage_adaptive = get_coverage(adaptive_prediction_sets, dataset, test_idx, args.alpha, len(true_calibration_idx))
                 empirical_coverage_regularized = get_coverage(regularized_prediction_sets, dataset, test_idx, args.alpha,
                                                            len(true_calibration_idx))
+                empirical_coverage_daps = get_coverage(daps_prediction_sets, dataset, test_idx, args.alpha,
+                                                            len(true_calibration_idx))
 
                 singleton_hit_ratio_threshold = get_singleton_hit_ratio(threshold_prediction_sets, dataset, test_idx)
                 efficiency_threshold = get_efficiency(threshold_prediction_sets)
@@ -105,18 +120,30 @@ def main(args):
                 singleton_hit_ratio_regularized = get_singleton_hit_ratio(regularized_prediction_sets, dataset, test_idx)
                 efficiency_regularized = get_efficiency(regularized_prediction_sets)
 
+                singleton_hit_ratio_daps = get_singleton_hit_ratio(daps_prediction_sets, dataset, test_idx)
+                efficiency_daps = get_efficiency(daps_prediction_sets)
+
                 print(f"The empirical coverage for threshold is {empirical_coverage_threshold}")
                 print(f"The empirical coverage for adaptive is {empirical_coverage_adaptive}")
                 print(f"The empirical coverage for regularized is {empirical_coverage_regularized}")
+                print(f"The empirical coverage for DAPS is {empirical_coverage_daps}")
+                print()
 
                 print(f"The singleton hit ratio threshold is {singleton_hit_ratio_threshold}")
                 print(f"The efficiency for threshold is {efficiency_threshold}")
+                print()
 
                 print(f"The singleton hit ratio adaptive is {singleton_hit_ratio_adaptive}")
                 print(f"The efficiency for adaptive is {efficiency_adaptive}")
+                print()
 
                 print(f"The singleton hit ratio regularized is {singleton_hit_ratio_regularized}")
                 print(f"The efficiency for regularized is {efficiency_regularized}")
+                print()
+
+                print(f"The singleton hit ratio DAPS is {singleton_hit_ratio_daps}")
+                print(f"The efficiency for DAPS is {efficiency_daps}")
+
 
 if __name__ == "__main__":
 
@@ -137,7 +164,6 @@ if __name__ == "__main__":
                                             "Needs to be in range [0.0 - 0.9]", default=0.6, type=float)
 
     args = parser.parse_args()
-    print(args.random_split)
 
     #Start training
     main(args)
