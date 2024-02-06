@@ -153,7 +153,7 @@ class DataManager:
         return train_idx, test_idx
 
     def get_calibration_split(self, train_idx, equal_samples_per_cls=True,
-                              number_nodes_per_cls=20, percentage_train_data=1/3, tuning_set=False, percentage_tuning_data=None):
+                              number_nodes_per_cls=80, percentage_train_data=1/3, tuning_set=False, percentage_tuning_data=None):
 
         #ToDo: Clean this a bit up and write it more concisely
 
@@ -281,7 +281,7 @@ class Graph_Trainer:
         for epoch in range(1, n_epochs+1):
             #We train full batch
             #Log every 10 steps
-            if verbose and (epoch % 1 == 0 or epoch == 1):
+            if verbose and (epoch % 10 == 0):
                 print(f'Epoch {epoch:3d} - ', end='')
 
             loss_train, loss_valid, accuracy_train = self._train(x, edge_index, y, train_mask, valid_mask)
@@ -297,12 +297,12 @@ class Graph_Trainer:
                 else:
                     self.patience -= 1
 
-            if verbose and (epoch % 1 == 0 or epoch == 1):
+            if verbose and (epoch % 10 == 0):
                 print(f'train_loss: {float(loss_train):.4f}\ttrain_acc: {accuracy_train:.4f}\tvalid_loss: {loss_valid:.4f}')
 
             if self.patience == 0:
                 print(f'Training is stopped as the model has not improved the validation loss in the past {kwargs.get("patience")} epochs!')
-                #If the model has not improved the past patience steps, then we stop training
+                # If the model has not improved the past patience steps, then we stop training
                 break
 
     def save_model(self, directory, save_name):
