@@ -73,7 +73,8 @@ class Threshold_Conformer:
 
 class Adaptive_Conformer:
 
-    def __init__(self, alpha, model, dataset, calibration_mask, random_split=False, lambda_penalty=0., k_reg=None, seed=7):
+    def __init__(self, alpha, model, dataset, calibration_mask, random_split=False,
+                 lambda_penalty=0., k_reg=None, seed=7):
 
         seed_everything(seed)
 
@@ -106,7 +107,6 @@ class Adaptive_Conformer:
 
         # Now we summed up the probabilities
         cumulative_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
 
         # Find the value where the target class occurs in the sorted index,
         # The first value is the sample and the second one the specific cutoff_idx
@@ -148,7 +148,6 @@ class Adaptive_Conformer:
             # Penalize everything above a certain rank
             y_rank = torch.ones(n, 1)*self.k_reg
 
-
         # Initialize the penalty vector
         regularization_penalty = torch.arange(k, dtype=float).expand(n, -1) - y_rank
 
@@ -184,6 +183,77 @@ class Adaptive_Conformer:
             prediction_sets.append(prediction_set)
 
         return prediction_sets
+
+class DAPS:
+
+    # Code adapted from:
+    # https://github.com/soroushzargar/DAPS/blob/main/torch-conformal/gnn_cp/cp/graph_transformations.py
+
+    def __init__(self, alpha, model, dataset, calibration_mask, seed, neighborhood_coefficient):
+
+        #super().__init__(alpha, model, dataset, calibration_mask, seed)
+
+        self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
+        self.num_nodes = self.x.shape[0]
+        self.neighborhood_coefficient = neighborhood_coefficient
+        self.alpha = alpha
+        self.model = model
+
+        #Create the adjacency matrix and the degree matrix needed for the calculating the score
+        self.A = torch.sparse.FloatTensor(
+            dataset.edge_index,
+            torch.ones(self.edge_index.shape[1]),
+            (self.num_nodes, self.num_nodes)
+        )
+        self.D = torch.matmul(self.A, torch.ones(self.A.shape[0]))
+
+        self.threshold_q = self._get_quantile(calibration_mask)
+
+    def _get_quantile(self, calibration_mask):
+
+        y_calibration = self.y[calibration_mask]
+        n = len(y_calibration)
+
+        #Get the logit scores of shape num_nodes, num_classes
+        logit_scores = self.model(self.x, self.edge_index)
+
+        #First step: Calculate the aggregated neighborhood scores
+        neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
+        neighborhood_logits_norm = neighborhood_logits / (1 / (self.D + 1e-10))[:, None]
+
+        daps_scores = logit_scores * (1-self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
+
+        softmax_scores = F.softmax(daps_scores[calibration_mask], dim=1)
+
+        uncertainty_scores = 1 - softmax_scores
+        true_label_indices = torch.arange(len(y_calibration))
+        uncertainty_scores_true_label = uncertainty_scores[true_label_indices, y_calibration]
+
+        threshold_quantile = np.ceil(((n+1)*(1-self.alpha)))/n
+
+        #Clip the trehsold quantile to avoid runtime errors
+        threshold_quantile = np.clip(threshold_quantile, 0., 1.)
+
+        #Calculate the variance to make sure  we are still in the bounds
+        self.variance = (self.alpha * (1-self.alpha))/(n+2)
+
+        #Sort the uncertainty scores from low to large
+        uncertainty_scores_true_label_sorted = torch.sort(uncertainty_scores_true_label, descending=False)[0]
+
+        return torch.quantile(uncertainty_scores_true_label_sorted, threshold_quantile, interpolation='higher')
+
+    def get_prediction_sets(self, test_set_mask):
+
+        logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
+        softmax_scores = F.softmax(logit_scores, dim=-1)
+        uncertainty_scores = 1 - softmax_scores
+
+        #Get a mask to check which predictions are below the threshold
+        uncertainty_scores_below_threshold = uncertainty_scores <= self.threshold_q
+
+        self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in uncertainty_scores_below_threshold]
+
+        return self.prediction_sets
 
 def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration_set):
 
@@ -235,4 +305,18 @@ def get_efficiency(prediction_sets):
     average_set_size = np.mean(len_non_zero_prediction_sets)
 
     return round(float(average_set_size), 4)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
