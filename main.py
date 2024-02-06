@@ -89,7 +89,8 @@ def main(args):
                 model_new.load_state_dict(torch.load(os.path.join(save_location, save_name)))
 
                 #Get the DAPS
-                daps_conformer = DAPS(args.alpha, model_new, dataset, true_calibration_idx, seed=args.random_seed, neighborhood_coefficient=0.1)
+                daps_conformer = DAPS(args.alpha, model_new, dataset, true_calibration_idx, random_split=args.random_split,
+                                      seed=args.random_seed, neighborhood_coefficient=0.5)
                 daps_prediction_sets = daps_conformer.get_prediction_sets(test_idx)
 
                 #Get the conformer now
@@ -100,7 +101,7 @@ def main(args):
                 adaptive_prediction_sets = adaptive_conformer.get_prediction_sets(test_idx)
 
                 regularized_conformer = Adaptive_Conformer(args.alpha, model_new, dataset, true_calibration_idx, random_split=args.random_split,
-                                                           lambda_penalty=0., k_reg=1, seed=args.random_seed)
+                                                           lambda_penalty=0.5, k_reg=0, seed=args.random_seed)
                 regularized_prediction_sets = regularized_conformer.get_prediction_sets(test_idx)
 
                 #Get the performance metrics
