@@ -249,7 +249,7 @@ class Graph_Trainer:
 
         return optimizer
 
-    def fit(self, data, train_mask, valid_mask, **kwargs):
+    def fit(self, data, train_mask, valid_mask, verbose, **kwargs):
         x, edge_index, y = data.x, data.edge_index, data.y
         #Set the model to train mode
         self.model.train()
@@ -259,7 +259,8 @@ class Graph_Trainer:
         n_epochs = kwargs.get("n_epochs", 200)
         self.early_stopping = kwargs.get("early_stopping", False)
         self.patience = kwargs.get("patience", 10)
-        verbose = kwargs.get("verbose", True)
+        #self.verbose = verbose
+        #verbose = kwargs.get("verbose", True)
 
         self.warm_up = 50
 

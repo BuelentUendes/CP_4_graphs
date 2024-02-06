@@ -6,9 +6,8 @@ training_protocols:
     warm_up: true
     warm_up_epochs: 50
     n_epochs: 200
-    early_stopping: true
-    patience: 10
-    verbose: true
+    early_stopping: false
+    patience: 20
 
   GAT:
     optimizer_name: "adam"
@@ -17,9 +16,8 @@ training_protocols:
     warm_up: true
     warm_up_epochs: 50
     n_epochs: 200
-    early_stopping: true
-    patience: 10
-    verbose: true
+    early_stopping: false
+    patience: 20
 
   SAGE:
     optimizer_name: "adam"
@@ -27,10 +25,9 @@ training_protocols:
     weight_decay: 0.01
     warm_up: true
     warm_up_epochs: 50
-    early_stopping: true
+    early_stopping: false
     n_epochs: 200
-    patience: 10
-    verbose: true
+    patience: 20
 
   APPNPNet:
     optimizer_name: "adam"
@@ -38,7 +35,6 @@ training_protocols:
     weight_decay: 0.0001
     warm_up: true
     warm_up_epochs: 50
-    early_stopping: true
+    early_stopping: false
     n_epochs: 200
-    patience: 10
-    verbose: true
+    patience: 20
