@@ -390,23 +390,21 @@ def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration
 
 def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
 
-    y_test = dataset.y[test_set_mask]
-    n = len(y_test)
+    # Convert y_test to a PyTorch tensor
+    y_test = torch.tensor(dataset.y[test_set_mask])
 
-    #Filter out prediction_sets larger than 1
-    set_size_one = list(map(lambda x: len(x) == 1, prediction_sets))
-    predicted_labels_singletons = list(filter(lambda x: len(x) == 1, prediction_sets))
+    # Filter out prediction_sets larger than 1 and convert them to PyTorch tensors
+    set_size_one = torch.tensor([len(x) == 1 for x in prediction_sets])
+    predicted_labels_singletons = torch.tensor([x[0] for x in prediction_sets if len(x) == 1])
 
-    #Slice now list of lists y_test accordingly
-    true_labels_singletons = [[true_label.item()] for true_label, singleton_flag in zip(y_test, set_size_one) if singleton_flag]
+    # Slice the list of true labels accordingly and convert to PyTorch tensors
+    true_labels_singletons = y_test[set_size_one]
 
-    correct_singletons = 0
+    # Calculate the number of correct singletons
+    correct_singletons = torch.sum(predicted_labels_singletons == true_labels_singletons)
 
-    for predictions, true_labels in zip(predicted_labels_singletons, true_labels_singletons):
-        if predictions == true_labels:
-            correct_singletons += 1
-
-    singleton_hit_ratio = round(float(correct_singletons/n), 4)
+    # Calculate singleton hit ratio
+    singleton_hit_ratio = round(correct_singletons.item() / len(y_test), 4)
 
     return singleton_hit_ratio
 
