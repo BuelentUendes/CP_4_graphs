@@ -74,7 +74,7 @@ class Threshold_Conformer:
 class Adaptive_Conformer:
 
     def __init__(self, alpha, model, dataset, calibration_mask, random_split=False,
-                 lambda_penalty=0., k_reg=None, seed=7):
+                 lambda_penalty=0., k_reg=None, constant_penalty=False, seed=7):
 
         seed_everything(seed)
 
@@ -83,6 +83,7 @@ class Adaptive_Conformer:
         self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
         self.lambda_penalty = lambda_penalty
         self.k_reg = k_reg
+        self.constant_penalty = constant_penalty
         self.random_split = random_split
 
         self.threshold_q = self._get_quantile(calibration_mask)
@@ -149,10 +150,18 @@ class Adaptive_Conformer:
             y_rank = torch.ones(n, 1)*self.k_reg
 
         # Initialize the penalty vector
+        if self.constant_penalty:
+            penalty = self.lambda_penalty
+
+        # Linear penalty
+        else:
+            penalty = torch.arange(k, dtype=float) * self.lambda_penalty
+
         regularization_penalty = torch.arange(k, dtype=float).expand(n, -1) - y_rank
 
         # For classes for which the rank is lower than the true class rank we have zero penalty
-        regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), self.lambda_penalty)
+        #regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), self.lambda_penalty)
+        regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), penalty)
 
         regularized_softmax_scores_sorted = softmax_scores_sorted + regularization_penalty
         return regularized_softmax_scores_sorted
@@ -385,7 +394,7 @@ def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration
     variance = round((alpha * (1-alpha))/(len_calibration_set+2), 4)
 
     #assert empirical_coverage - round(3*np.sqrt(variance), 4) <= 1-alpha <= empirical_coverage + round(3*np.sqrt(variance), 4), "The coverage is not valid!"
-    print(f"We have the coverage of {empirical_coverage} +- {round(np.sqrt(variance), 4)}")
+    #print(f"We have the coverage of {empirical_coverage} +- {round(np.sqrt(variance), 4)}")
     return empirical_coverage
 
 def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
