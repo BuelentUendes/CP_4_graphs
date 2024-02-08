@@ -24,7 +24,7 @@ pip3 install -r requirements.txt
 4. Now you can check if the installation has worked by running:
 
 ~~~
-python3 main.py
+python3 train_models.py
 ~~~
 
 The "src" folder includes the source code for the models, whereas the "utils" folder includes additional utility functions needed for the project.
