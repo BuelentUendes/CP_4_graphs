@@ -15,10 +15,10 @@ import torch
 
 # Import the helper functions that are needed
 from utils.helper_path import DATA_PATH, CONFIG_PATH, MODELS_PATH
-from utils.helper import get_data, DataManager, Graph_Trainer, load_yaml_config_file, get_model, seed_everything, create_directory
-
-from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, DAPS, \
+from utils.helper import get_data, DataManager, load_yaml_config_file, get_model, seed_everything, \
     get_singleton_hit_ratio, get_efficiency, get_coverage
+
+from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, DAPS
 
 #Import library for allowing terminal commands
 import argparse
@@ -91,7 +91,7 @@ def main(args):
 
             regularized_conformer = Adaptive_Conformer(args.alpha, model, dataset, true_calibration_idx,
                                                        random_split=args.random_split,
-                                                       lambda_penalty=0.5, k_reg=0, seed=args.random_seed)
+                                                       lambda_penalty=1, k_reg=1, constant_penalty=args.constant_penalty, seed=args.random_seed)
             regularized_prediction_sets = regularized_conformer.get_prediction_sets(test_idx)
 
             # Get the performance metrics
@@ -139,15 +139,15 @@ def main(args):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Cora")
     parser.add_argument("--model", help="Specify which model(s) you want to train and use", type=parse_model, default="GCN")
-    parser.add_argument("--random_seed", help="Specify the seed", type=int, default=0)
+    parser.add_argument("--random_seed", help="Specify the seed", type=int, default=1)
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--alpha", help="alpha value for the conformal prediction. 1-alpha is the coverage that one wants to achieve",
-                        type=float, default=0.)
+                        type=float, default=0.30)
+    parser.add_argument("--constant_penalty", help="Applies constant penalty to the regularized version", action="store_true")
     parser.add_argument("--random_split", help="Boolean indicating if we want to randomly split. Default True", action="store_false")
 
     #We add the homophile argument. However, this is only used for the MixHop dataset
