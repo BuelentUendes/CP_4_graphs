@@ -419,6 +419,61 @@ class Graph_Trainer:
 
 #Code adapted from: https://lightning.ai/docs/pytorch/stable/notebooks/course_UvA-DL/06-graph-neural-networks.html
 
+def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration_set):
+
+    y_test = dataset.y[test_set_mask]
+    n = len(y_test)
+    coverage = 0
+    #Check if label is contained in prediction_set
+    for idx, set in enumerate(prediction_sets):
+        if y_test[idx] in set:
+            coverage += 1
+
+    empirical_coverage = round(float(coverage/n), 4)
+
+    # Check if we get approximately true coverage based on asymptotics
+    l = np.floor((len_calibration_set + 1) * alpha)
+    a = len_calibration_set + 1 - l
+    b = l
+    variance = (a * b) / ((a * b) ** 2) * (a + b + 1)
+
+    #Check if we have valid coverage based on asymptotics!
+    assert empirical_coverage - round(3*np.sqrt(variance), 4) <= 1-alpha <= empirical_coverage + round(3*np.sqrt(variance), 4), "The coverage is not valid!"
+
+    return empirical_coverage
+
+def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
+
+    # Convert y_test to a PyTorch tensor
+    y_test = torch.tensor(dataset.y[test_set_mask])
+
+    # Filter out prediction_sets larger than 1 and convert them to PyTorch tensors
+    set_size_one = torch.tensor([len(x) == 1 for x in prediction_sets])
+    predicted_labels_singletons = torch.tensor([x[0] for x in prediction_sets if len(x) == 1])
+
+    # Slice the list of true labels accordingly and convert to PyTorch tensors
+    true_labels_singletons = y_test[set_size_one]
+
+    # Calculate the number of correct singletons
+    correct_singletons = torch.sum(predicted_labels_singletons == true_labels_singletons)
+
+    # Calculate singleton hit ratio
+    singleton_hit_ratio = round(correct_singletons.item() / len(y_test), 4)
+
+    return singleton_hit_ratio
+
+def get_efficiency(prediction_sets):
+
+    #Filter first zero/empty sets
+    non_zero_prediction_sets = list(filter(lambda x: len(x) > 0, prediction_sets))
+    len_non_zero_prediction_sets = list(map(lambda x: len(x), non_zero_prediction_sets))
+
+    average_set_size = np.mean(len_non_zero_prediction_sets)
+
+    return round(float(average_set_size), 4)
+
+
+
 
 
 
