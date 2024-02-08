@@ -50,9 +50,6 @@ class Threshold_Conformer:
         #Clip the trehsold quantile to avoid runtime errors
         threshold_quantile = np.clip(threshold_quantile, 0., 1.)
 
-        #Calculate the variance to make sure  we are still in the bounds
-        self.variance = (self.alpha * (1-self.alpha))/(n+2)
-
         #Sort the uncertainty scores from low to large
         uncertainty_scores_true_label_sorted = torch.sort(uncertainty_scores_true_label, descending=False)[0]
 
@@ -183,8 +180,8 @@ class Adaptive_Conformer:
 
         for cumulative_scores, softmax_scores_index in zip(cumulated_softmax_scores, softmax_scores_indices):
             try:
-                cutoff_idx = torch.nonzero(cumulative_scores < self.threshold_q, as_tuple=False)[-1]
-                prediction_set = softmax_scores_index[:min(len(softmax_scores_index), cutoff_idx + 1)].tolist()
+                cutoff_idx = torch.nonzero(cumulative_scores < self.threshold_q, as_tuple=False)[-1] #Get the last index just below the threshold
+                prediction_set = softmax_scores_index[:min(len(softmax_scores_index), cutoff_idx + 1)].tolist() #Include plus 1
 
             except IndexError: #if all values are above the threshold, then I do have an empty set and I will return the first value above it
                 prediction_set = [softmax_scores_index[0].item()]
@@ -246,9 +243,6 @@ class DAPS_threshold:
 
         #Clip the trehsold quantile to avoid runtime errors
         threshold_quantile = np.clip(threshold_quantile, 0., 1.)
-
-        #Calculate the variance to make sure  we are still in the bounds
-        self.variance = (self.alpha * (1-self.alpha))/(n+2)
 
         #Sort the uncertainty scores from low to large
         uncertainty_scores_true_label_sorted = torch.sort(uncertainty_scores_true_label, descending=False)[0]
@@ -391,10 +385,14 @@ def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration
     empirical_coverage = round(float(coverage/n), 4)
 
     # Check if we get approximately true coverage based on asymptotics
-    variance = round((alpha * (1-alpha))/(len_calibration_set+2), 4)
+    l = np.floor((len_calibration_set + 1) * alpha)
+    a = len_calibration_set + 1 - l
+    b = l
+    variance = (a * b) / ((a * b) ** 2) * (a + b + 1)
 
-    #assert empirical_coverage - round(3*np.sqrt(variance), 4) <= 1-alpha <= empirical_coverage + round(3*np.sqrt(variance), 4), "The coverage is not valid!"
-    #print(f"We have the coverage of {empirical_coverage} +- {round(np.sqrt(variance), 4)}")
+    #Check if we have valid coverage based on asymptotics!
+    assert empirical_coverage - round(3*np.sqrt(variance), 4) <= 1-alpha <= empirical_coverage + round(3*np.sqrt(variance), 4), "The coverage is not valid!"
+
     return empirical_coverage
 
 def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
