@@ -18,7 +18,7 @@ from utils.helper_path import DATA_PATH, CONFIG_PATH, MODELS_PATH
 from utils.helper import get_data, DataManager, load_yaml_config_file, get_model, seed_everything, \
     get_singleton_hit_ratio, get_efficiency, get_coverage
 
-from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, DAPS, K_Hop_DAPS
+from src.conformal_prediction_sets import Threshold_Conformer, Adaptive_Conformer, DAPS, K_Hop_DAPS, Score_Propagation
 
 #Import library for allowing terminal commands
 import argparse
@@ -85,6 +85,12 @@ def main(args):
                                   seed=args.random_seed, neighborhood_coefficients=[0.8, 0.2])
             k_hop_prediction_sets = k_hop_conformer.get_prediction_sets(test_idx)
 
+            # Get the score propagation scores
+            score_propagation_conformer = Score_Propagation(args.alpha, model, dataset, true_calibration_idx, random_split=args.random_split,
+                                  seed=args.random_seed, neighborhood_coefficient=0.85)
+            score_propagation_prediction_sets = score_propagation_conformer.get_prediction_sets(test_idx)
+
+
             # Get the conformer now
             threshold_conformer = Threshold_Conformer(args.alpha, model, dataset, true_calibration_idx,
                                                       seed=args.random_seed)
@@ -110,6 +116,8 @@ def main(args):
                                                    len(true_calibration_idx))
             empirical_coverage_k_hop = get_coverage(k_hop_prediction_sets, dataset, test_idx, args.alpha,
                                                    len(true_calibration_idx))
+            empirical_coverage_score_propagation = get_coverage(score_propagation_prediction_sets, dataset, test_idx, args.alpha,
+                                                    len(true_calibration_idx))
 
             singleton_hit_ratio_threshold = get_singleton_hit_ratio(threshold_prediction_sets, dataset, test_idx)
             efficiency_threshold = get_efficiency(threshold_prediction_sets)
@@ -126,12 +134,15 @@ def main(args):
             singleton_hit_ratio_k_hop = get_singleton_hit_ratio(daps_prediction_sets, dataset, test_idx)
             efficiency_k_hop = get_efficiency(k_hop_prediction_sets)
 
+            singleton_hit_ratio_score_propagation = get_singleton_hit_ratio(score_propagation_prediction_sets, dataset, test_idx)
+            efficiency_score_propagation = get_efficiency(score_propagation_prediction_sets)
 
             print(f"The empirical coverage for threshold is {empirical_coverage_threshold}")
             print(f"The empirical coverage for adaptive is {empirical_coverage_adaptive}")
             print(f"The empirical coverage for regularized is {empirical_coverage_regularized}")
             print(f"The empirical coverage for DAPS is {empirical_coverage_daps}")
             print(f"The empirical coverage for K_Hop is {empirical_coverage_k_hop}")
+            print(f"The empirical coverage for Score Propagation is {empirical_coverage_score_propagation}")
             print()
 
             print(f"The singleton hit ratio threshold is {singleton_hit_ratio_threshold}")
@@ -152,6 +163,10 @@ def main(args):
 
             print(f"The singleton hit ratio K_Hop is {singleton_hit_ratio_daps}")
             print(f"The efficiency for K_Hop is {efficiency_k_hop}")
+            print()
+
+            print(f"The singleton hit ratio Score Propagation is {singleton_hit_ratio_score_propagation}")
+            print(f"The efficiency for Score Propagation is {efficiency_score_propagation}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -161,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument("--random_seed", help="Specify the seed", type=int, default=1)
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--alpha", help="alpha value for the conformal prediction. 1-alpha is the coverage that one wants to achieve",
-                        type=float, default=0.10)
+                        type=float, default=0.05)
     parser.add_argument("--constant_penalty", help="Applies constant penalty to the regularized version", action="store_true")
     parser.add_argument("--random_split", help="Boolean indicating if we want to randomly split. Default True", action="store_false")
 
