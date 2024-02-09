@@ -1,43 +1,50 @@
+######################################################################################################
 # Source code for conformal prediction
+# Author: Buelent Uendes
+# Code adapted from:
+# # https://github.com/soroushzargar/DAPS/blob/main/torch-conformal/gnn_cp/cp/graph_transformations.py
+# # https://github.com/soroushzargar/DAPS/blob/main/torch-conformal/gnn_cp/cp/transformations.py
+#######################################################################################################
 
+# Import libraries
 import numpy as np
 import torch
 import torch.nn.functional as F
-import random
-import os
+from abc import ABC, abstractmethod
+from utils.helper import seed_everything
 
-def seed_everything(seed:int):
-    """
-    Sets a seed for reproducibility
-    :param seed: seed
-    :return: None
-    """
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
+class Abstract_Conformer(ABC):
+
+    @abstractmethod
+    def get_prediction_sets(self):
+        return
+
+    @abstractmethod
+    def _get_quantile(self):
+        return
+
+    @abstractmethod
+    def _get_transformed_logit_scores(self):
+        return
 
 #ToDo: Push to device!
 
-class Threshold_Conformer:
+class Threshold_Conformer(ABC):
 
     def __init__(self, alpha, model, dataset, calibration_mask, seed):
 
+        super().__init__()
         seed_everything(seed)
 
         self.alpha = alpha
         self.model = model
         self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
         self.calibration_mask = calibration_mask
-        #self.threshold_q = self._get_quantile(calibration_mask)
 
     def get_prediction_sets(self, test_set_mask):
 
         threshold_q = self._get_quantile()
-        logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
+        logit_scores = self._get_transformed_logit_scores(test_set_mask)
         softmax_scores = F.softmax(logit_scores, dim=-1)
         uncertainty_scores = 1 - softmax_scores
 
@@ -53,7 +60,8 @@ class Threshold_Conformer:
         y_calibration = self.y[self.calibration_mask]
         n = len(y_calibration)
 
-        logit_scores = self.model(self.x, self.edge_index)[self.calibration_mask]
+        logit_scores = self._get_transformed_logit_scores()
+
         softmax_scores = F.softmax(logit_scores, dim=1)
 
         uncertainty_scores = 1 - softmax_scores
@@ -70,11 +78,21 @@ class Threshold_Conformer:
 
         return torch.quantile(uncertainty_scores_true_label_sorted, threshold_quantile, interpolation='higher')
 
-class Adaptive_Conformer:
+    def _get_transformed_logit_scores(self, mask=None):
+
+        if mask is None:
+            scores = self.model(self.x, self.edge_index)[self.calibration_mask]
+        else:
+            scores = self.model(self.x, self.edge_index)[mask]
+
+        return scores
+
+class Adaptive_Conformer(Abstract_Conformer):
 
     def __init__(self, alpha, model, dataset, calibration_mask, random_split=False,
-                 lambda_penalty=0., k_reg=None, constant_penalty=False, seed=7):
+                 lambda_penalty=0., k_reg=1, constant_penalty=False, seed=7):
 
+        super().__init__()
         seed_everything(seed)
 
         self.alpha = alpha
@@ -89,7 +107,7 @@ class Adaptive_Conformer:
     def get_prediction_sets(self, test_set_mask):
 
         threshold_q = self._get_quantile()
-        logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
+        logit_scores = self._get_transformed_logit_scores(test_set_mask)
         softmax_scores = F.softmax(logit_scores, dim=1)
 
         softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1, descending=True)
@@ -99,7 +117,6 @@ class Adaptive_Conformer:
 
         prediction_sets = []
 
-        # #I can use torch.cumsum() and filter again here!
         cumulated_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
 
         for cumulative_scores, softmax_scores_index in zip(cumulated_softmax_scores, softmax_scores_indices):
@@ -118,8 +135,7 @@ class Adaptive_Conformer:
 
         y_calibration = self.y[self.calibration_mask]
         n = len(y_calibration)
-
-        logit_scores = self.model(self.x, self.edge_index)[self.calibration_mask]
+        logit_scores = self._get_transformed_logit_scores()
         softmax_scores = F.softmax(logit_scores, dim=1)
 
         #Get the softmax score of the true class
@@ -158,7 +174,7 @@ class Adaptive_Conformer:
 
         threshold_quantile = np.clip(threshold_quantile, 0.0, 1.0)
 
-        return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
+        return torch.quantile(final_softmax_scores_sorted, threshold_quantile, interpolation='higher')
 
     def _get_regularized_softmax_scores(self, softmax_scores_sorted, softmax_scores_sorted_indices, y_calibration=None):
 
@@ -168,7 +184,7 @@ class Adaptive_Conformer:
         #If we have calibration data we use it
         if y_calibration is not None:
             # Use the true rank
-            y_rank = torch.where(softmax_scores_sorted_indices==y_calibration.unsqueeze(1))[1].reshape(-1, 1)
+            y_rank = torch.where(softmax_scores_sorted_indices == y_calibration.unsqueeze(1))[1].reshape(-1, 1)
 
         else:
             # Penalize everything above a certain rank
@@ -185,32 +201,31 @@ class Adaptive_Conformer:
         regularization_penalty = torch.arange(k, dtype=float).expand(n, -1) - y_rank
 
         # For classes for which the rank is lower than the true class rank we have zero penalty
-        #regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), self.lambda_penalty)
         regularization_penalty = torch.where(regularization_penalty < 0, torch.tensor(0), penalty)
 
         regularized_softmax_scores_sorted = softmax_scores_sorted + regularization_penalty
         return regularized_softmax_scores_sorted
 
-class DAPS_threshold:
+    def _get_transformed_logit_scores(self, mask=None):
+
+        if mask is None:
+            scores = self.model(self.x, self.edge_index)[self.calibration_mask]
+        else:
+            scores = self.model(self.x, self.edge_index)[mask]
+
+        return scores
+
+class DAPS_Threshold(Threshold_Conformer):
     """
     Implements DAPS on top of a threshold conformal prediction class as presented in the paper:
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
     """
-    # Code adapted from:
-    # https://github.com/soroushzargar/DAPS/blob/main/torch-conformal/gnn_cp/cp/graph_transformations.py
 
     def __init__(self, alpha, model, dataset, calibration_mask, seed, neighborhood_coefficient):
 
-        #super().__init__(alpha, model, dataset, calibration_mask, seed)
-
-        seed_everything(seed)
-
-        self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
-        self.calibration_mask = calibration_mask
+        super().__init__(alpha, model, dataset, calibration_mask, seed)
         self.num_nodes = self.x.shape[0]
         self.neighborhood_coefficient = neighborhood_coefficient
-        self.alpha = alpha
-        self.model = model
 
         #Create the adjacency matrix and the degree matrix needed for the calculating the score
         self.A = torch.sparse.FloatTensor(
@@ -220,67 +235,36 @@ class DAPS_threshold:
         )
         self.D = torch.matmul(self.A, torch.ones(self.A.shape[0]))
 
-    def get_prediction_sets(self, test_set_mask):
+    def _get_transformed_logit_scores(self, mask):
 
-        threshold_q = self._get_quantile()
-        logit_scores = self.model(self.x, self.edge_index)[test_set_mask]
-        softmax_scores = F.softmax(logit_scores, dim=-1)
-        uncertainty_scores = 1 - softmax_scores
-
-        #Get a mask to check which predictions are below the threshold
-        uncertainty_scores_below_threshold = uncertainty_scores <= threshold_q
-
-        self.prediction_sets = [torch.nonzero(mask).squeeze(dim=1).tolist() for mask in uncertainty_scores_below_threshold]
-
-        return self.prediction_sets
-
-    def _get_quantile(self):
-
-        y_calibration = self.y[self.calibration_mask]
-        n = len(y_calibration)
-
-        #Get the logit scores of shape num_nodes, num_classes
+        # Get the logit scores of shape num_nodes, num_classes
         logit_scores = self.model(self.x, self.edge_index)
 
-        #First step: Calculate the aggregated neighborhood scores
+        # First step: Calculate the aggregated neighborhood scores
         neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
         neighborhood_logits_norm = neighborhood_logits / (1 / (self.D + 1e-10))[:, None]
 
-        daps_scores = logit_scores * (1-self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
+        daps_scores = logit_scores * (1 - self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
 
-        softmax_scores = F.softmax(daps_scores[self.calibration_mask], dim=1)
+        if mask is None:
+            scores = daps_scores[self.calibration_mask]
 
-        uncertainty_scores = 1 - softmax_scores
-        true_label_indices = torch.arange(len(y_calibration))
-        uncertainty_scores_true_label = uncertainty_scores[true_label_indices, y_calibration]
+        else:
+            scores = daps_scores[mask]
 
-        threshold_quantile = np.ceil(((n+1)*(1-self.alpha)))/n
+        return scores
 
-        #Clip the trehsold quantile to avoid runtime errors
-        threshold_quantile = np.clip(threshold_quantile, 0., 1.)
-
-        #Sort the uncertainty scores from low to large
-        uncertainty_scores_true_label_sorted = torch.sort(uncertainty_scores_true_label, descending=False)[0]
-
-        return torch.quantile(uncertainty_scores_true_label_sorted, threshold_quantile, interpolation='higher')
-
-class DAPS:
+class DAPS(Adaptive_Conformer):
     """
     Implements the diffusion adaptive score on top of an APS as presented in the paper:
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
     """
     def __init__(self, alpha, model, dataset, calibration_mask, seed, random_split, neighborhood_coefficient):
 
-        #super().__init__(alpha, model, dataset, calibration_mask, seed)
-        seed_everything(seed)
+        super().__init__(alpha, model, dataset, calibration_mask, random_split=random_split, seed=seed)
 
-        self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
-        self.calibration_mask = calibration_mask
         self.num_nodes = self.x.shape[0]
-        self.random_split = random_split
         self.neighborhood_coefficient = neighborhood_coefficient
-        self.alpha = alpha
-        self.model = model
 
         #Create the adjacency matrix and the degree matrix needed for the calculating the score
         self.A = torch.sparse.FloatTensor(
@@ -290,111 +274,41 @@ class DAPS:
         )
         self.D = torch.matmul(self.A, torch.ones(self.A.shape[0]))
 
-    def get_prediction_sets(self, test_set_mask):
+    def _get_transformed_logit_scores(self, mask=None):
 
-        self.threshold_q = self._get_quantile()
-        #Get the logit scores of shape num_nodes, num_classes
+        # Get the logit scores of shape num_nodes, num_classes
         logit_scores = self.model(self.x, self.edge_index)
 
-        #First step: Calculate the aggregated neighborhood scores
+        # First step: Calculate the aggregated neighborhood scores
         neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
         neighborhood_logits_norm = neighborhood_logits * (1 / (self.D + 1e-10))[:, None]
 
-        daps_scores = logit_scores * (1-self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
+        daps_scores = logit_scores * (1 - self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
 
-        softmax_scores = F.softmax(daps_scores[test_set_mask], dim=1)
+        if mask is None:
+            scores = daps_scores[self.calibration_mask]
+        else:
+            scores = daps_scores[mask]
 
-        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1, descending=True)
+        return scores
 
-        prediction_sets = []
-
-        # #I can use torch.cumsum() and filter again here!
-        cumulated_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
-        for cumulative_scores, softmax_scores_index in zip(cumulated_softmax_scores, softmax_scores_indices):
-            try:
-                cutoff_idx = torch.nonzero(cumulative_scores < self.threshold_q, as_tuple=False)[-1]
-                prediction_set = softmax_scores_index[:min(len(softmax_scores_index), cutoff_idx + 1)].tolist()
-
-            except IndexError:  # if all values are above the threshold, then I do have an empty set and I will return the first value above it
-                prediction_set = [softmax_scores_index[0].item()]
-
-            prediction_sets.append(prediction_set)
-
-        return prediction_sets
-
-    def _get_quantile(self):
-
-        y_calibration = self.y[self.calibration_mask]
-        n = len(y_calibration)
-
-        #Get the logit scores of shape num_nodes, num_classes
-        logit_scores = self.model(self.x, self.edge_index)
-
-        #First step: Calculate the aggregated neighborhood scores
-        neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
-        neighborhood_logits_norm = neighborhood_logits * (1 / (self.D + 1e-10))[:, None]
-
-        daps_scores = logit_scores * (1-self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
-
-        softmax_scores = F.softmax(daps_scores[self.calibration_mask], dim=1)
-
-        # Get the softmax score of the true class
-        softmax_score_true_class = softmax_scores[torch.arange(softmax_scores.shape[0]), y_calibration].reshape(-1, 1)
-
-        # Get the sorted probabilities from large to low
-        softmax_scores_sorted, softmax_scores_sorted_indices = torch.sort(softmax_scores, descending=True, dim=1)
-
-        # Now we summed up the probabilities
-        cumulative_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
-        # Find the value where the target class occurs in the sorted index,
-        # The first value is the sample and the second one the specific cutoff_idx
-        cutoff_idx = torch.nonzero(softmax_scores_sorted_indices == y_calibration.unsqueeze(1), as_tuple=False)
-
-        softmax_scores_cut = torch.tensor(
-            [cumulative_softmax_scores[sample, idx] for sample, idx in cutoff_idx]).reshape(-1, 1)
-
-        # Get the random score
-        if self.random_split:
-            u_vec = torch.rand_like(softmax_score_true_class)
-            ## Add the random noise to it (and subtract the softmax_true_class as we previously included it)
-            ## v * softmax -1 * softmax = (v-1) softmax_true_class
-            softmax_scores_cut += (u_vec - 1) * softmax_score_true_class
-            random_noise = u_vec * softmax_score_true_class
-            softmax_scores_cut += random_noise - softmax_score_true_class
-
-        # Sort the final softmax_scores
-        final_softmax_scores_sorted, _ = torch.sort(softmax_scores_cut, descending=True)
-
-        # Get the threshold quantile
-        threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
-
-        threshold_quantile = np.clip(threshold_quantile, 0.0, 1.0)
-
-        return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
-
-class K_Hop_DAPS:
+class K_Hop_DAPS(Adaptive_Conformer):
     """
-    Implements the k-hop neighbors diffusion score as presented in the paper:
+    Implements the k-hop neighbors diffusion score on top of an APS as presented in the paper:
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
     """
     def __init__(self, alpha, model, dataset, calibration_mask, seed,
                  random_split, k, neighborhood_coefficients):
 
-        seed_everything(seed)
+        super().__init__(alpha, model, dataset, calibration_mask, random_split=random_split, seed=seed)
 
-        self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
-        self.calibration_mask = calibration_mask
         self.num_nodes = self.x.shape[0]
-        self.random_split = random_split
 
+        #Quick safe guard
         assert len(neighborhood_coefficients) == k, "Please provide for each hop a coefficient in a list!"
 
         self.k = k
         self.neighborhood_coefficients = neighborhood_coefficients
-        self.alpha = alpha
-        self.model = model
 
         #Create the adjacency matrix and the degree matrix needed for the calculating the score
         self.A = torch.sparse.FloatTensor(
@@ -404,13 +318,11 @@ class K_Hop_DAPS:
         )
         self.D = torch.matmul(self.A, torch.ones(self.A.shape[0]))
 
-    def get_prediction_sets(self, test_set_mask):
+    def _get_transformed_logit_scores(self, mask=None):
 
-        self.threshold_q = self._get_quantile()
-        #Get the logit scores of shape num_nodes, num_classes
+        # Get the logit scores of shape num_nodes, num_classes
         logit_scores = self.model(self.x, self.edge_index)
 
-        # First we can get the
         k_hop_scores = self.neighborhood_coefficients[0] * logit_scores
 
         for i in range(1, len(self.neighborhood_coefficients)):
@@ -418,81 +330,15 @@ class K_Hop_DAPS:
             neighborhood_logits_norm = (neighborhood_logits * (1 / (self.D + 1e-10))[:, None]) ** i
             k_hop_scores += self.neighborhood_coefficients[i] * neighborhood_logits_norm
 
-        softmax_scores = F.softmax(k_hop_scores[test_set_mask], dim=1)
+        if mask is None:
+            scores = k_hop_scores[self.calibration_mask]
 
-        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1, descending=True)
+        else:
+            scores = k_hop_scores[mask]
 
-        prediction_sets = []
+        return scores
 
-        # #I can use torch.cumsum() and filter again here!
-        cumulated_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
-        for cumulative_scores, softmax_scores_index in zip(cumulated_softmax_scores, softmax_scores_indices):
-            try:
-                cutoff_idx = torch.nonzero(cumulative_scores < self.threshold_q, as_tuple=False)[-1]
-                prediction_set = softmax_scores_index[:min(len(softmax_scores_index), cutoff_idx + 1)].tolist()
-
-            except IndexError:  # if all values are above the threshold, then I do have an empty set and I will return the first value above it
-                prediction_set = [softmax_scores_index[0].item()]
-
-            prediction_sets.append(prediction_set)
-
-        return prediction_sets
-
-    def _get_quantile(self):
-
-        y_calibration = self.y[self.calibration_mask]
-        n = len(y_calibration)
-
-        #Get the logit scores of shape num_nodes, num_classes
-        logit_scores = self.model(self.x, self.edge_index)
-
-        #First we can get the
-        k_hop_scores = self.neighborhood_coefficients[0] * logit_scores
-
-        for i in range(1, len(self.neighborhood_coefficients)):
-            neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
-            neighborhood_logits_norm = (neighborhood_logits * (1 / (self.D + 1e-10))[:, None])**i
-            k_hop_scores += self.neighborhood_coefficients[i] * neighborhood_logits_norm
-
-        softmax_scores = F.softmax(k_hop_scores[self.calibration_mask], dim=1)
-
-        # Get the softmax score of the true class
-        softmax_score_true_class = softmax_scores[torch.arange(softmax_scores.shape[0]), y_calibration].reshape(-1, 1)
-
-        # Get the sorted probabilities from large to low
-        softmax_scores_sorted, softmax_scores_sorted_indices = torch.sort(softmax_scores, descending=True, dim=1)
-
-        # Now we summed up the probabilities
-        cumulative_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
-        # Find the value where the target class occurs in the sorted index,
-        # The first value is the sample and the second one the specific cutoff_idx
-        cutoff_idx = torch.nonzero(softmax_scores_sorted_indices == y_calibration.unsqueeze(1), as_tuple=False)
-
-        softmax_scores_cut = torch.tensor(
-            [cumulative_softmax_scores[sample, idx] for sample, idx in cutoff_idx]).reshape(-1, 1)
-
-        # Get the random score
-        if self.random_split:
-            u_vec = torch.rand_like(softmax_score_true_class)
-            ##Add the random noise to it (and subtract the softmax_true_class as we previously included it)
-            # v * softmax -1 * softmax = (v-1) softmax_true_class
-            softmax_scores_cut += (u_vec - 1) * softmax_score_true_class
-            random_noise = u_vec * softmax_score_true_class
-            softmax_scores_cut += random_noise - softmax_score_true_class
-
-        # Sort the final softmax_scores
-        final_softmax_scores_sorted, _ = torch.sort(softmax_scores_cut, descending=True)
-
-        # Get the threshold quantile
-        threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
-
-        threshold_quantile = np.clip(threshold_quantile, 0.0, 1.0)
-
-        return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
-
-class Score_Propagation:
+class Score_Propagation(Adaptive_Conformer):
     """
     Implements the score propagation (SP) algorithm as presented in the paper:
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
@@ -501,18 +347,11 @@ class Score_Propagation:
     def __init__(self, alpha, model, dataset, calibration_mask, seed,
                  random_split, neighborhood_coefficient, iterations=10):
 
-        seed_everything(seed)
-
-        self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
-        self.calibration_mask = calibration_mask
+        super().__init__(alpha, model, dataset, calibration_mask, random_split=random_split, seed=seed)
         self.num_nodes = self.x.shape[0]
-        self.random_split = random_split
 
         self.neighborhood_coefficient = neighborhood_coefficient
         self.iterations = iterations
-
-        self.alpha = alpha
-        self.model = model
 
         # Create the adjacency matrix and the degree matrix needed for the calculating the score
         self.A = torch.sparse.FloatTensor(
@@ -522,9 +361,8 @@ class Score_Propagation:
         )
         self.D = torch.matmul(self.A, torch.ones(self.A.shape[0]))
 
-    def get_prediction_sets(self, test_set_mask):
+    def _get_transformed_logit_scores(self, mask=None):
 
-        self.threshold_q = self._get_quantile()
         # Get the logit scores of shape num_nodes, num_classes
         logit_scores = self.model(self.x, self.edge_index)
 
@@ -534,83 +372,14 @@ class Score_Propagation:
         h_score = h0_score.clone()
 
         for _ in range(self.iterations):
-            degree_norm_adj = (self.A.to_dense()) / ((self.D + 1e-10)[:, None])
-            node_wise_score = torch.linalg.matmul(degree_norm_adj, h_score)
-            h_score = h0_score + self.neighborhood_coefficient * node_wise_score
-
-        softmax_scores = F.softmax(h_score[test_set_mask], dim=1)
-
-        softmax_scores_sorted, softmax_scores_indices = torch.sort(softmax_scores, dim=1, descending=True)
-
-        prediction_sets = []
-
-        # #I can use torch.cumsum() and filter again here!
-        cumulated_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
-        for cumulative_scores, softmax_scores_index in zip(cumulated_softmax_scores, softmax_scores_indices):
-            try:
-                cutoff_idx = torch.nonzero(cumulative_scores < self.threshold_q, as_tuple=False)[-1]
-                prediction_set = softmax_scores_index[:min(len(softmax_scores_index), cutoff_idx + 1)].tolist()
-
-            except IndexError:  # if all values are above the threshold, then I do have an empty set and I will return the first value above it
-                prediction_set = [softmax_scores_index[0].item()]
-
-            prediction_sets.append(prediction_set)
-
-        return prediction_sets
-
-    def _get_quantile(self):
-
-        y_calibration = self.y[self.calibration_mask]
-        n = len(y_calibration)
-
-        # Get the logit scores of shape num_nodes, num_classes
-        logit_scores = self.model(self.x, self.edge_index)
-
-        # Get first H0 score
-        h0_score = (1-self.neighborhood_coefficient) * logit_scores
-        # Store the score as we need this for the iteration
-        h_score = h0_score.clone()
-
-        for _ in range(self.iterations):
             degree_norm_adj = (self.A.to_dense()) * (1 / (self.D + 1e-10)[:, None])
             node_wise_score = torch.linalg.matmul(degree_norm_adj, h_score)
-            #node_wise_score = torch.linalg.matmul(h_score, degree_norm_adj)
             h_score = h0_score + self.neighborhood_coefficient * node_wise_score
 
-        softmax_scores = F.softmax(h_score[self.calibration_mask], dim=1)
+        if mask is None:
+            scores = h_score[self.calibration_mask]
 
-        # Get the softmax score of the true class
-        softmax_score_true_class = softmax_scores[torch.arange(softmax_scores.shape[0]), y_calibration].reshape(-1, 1)
+        else:
+            scores = h_score[mask]
 
-        # Get the sorted probabilities from large to low
-        softmax_scores_sorted, softmax_scores_sorted_indices = torch.sort(softmax_scores, descending=True, dim=1)
-
-        # Now we summed up the probabilities
-        cumulative_softmax_scores = torch.cumsum(softmax_scores_sorted, dim=1)
-
-        # Find the value where the target class occurs in the sorted index,
-        # The first value is the sample and the second one the specific cutoff_idx
-        cutoff_idx = torch.nonzero(softmax_scores_sorted_indices == y_calibration.unsqueeze(1), as_tuple=False)
-
-        softmax_scores_cut = torch.tensor(
-            [cumulative_softmax_scores[sample, idx] for sample, idx in cutoff_idx]).reshape(-1, 1)
-
-        # Get the random score
-        if self.random_split:
-            u_vec = torch.rand_like(softmax_score_true_class)
-            ##Add the random noise to it (and subtract the softmax_true_class as we previously included it)
-            ## v * softmax -1 * softmax = (v-1) softmax_true_class
-            softmax_scores_cut += (u_vec - 1) * softmax_score_true_class
-            random_noise = u_vec * softmax_score_true_class
-            softmax_scores_cut += random_noise - softmax_score_true_class
-
-        # Sort the final softmax_scores
-        final_softmax_scores_sorted, _ = torch.sort(softmax_scores_cut, descending=True)
-
-        # Get the threshold quantile
-        threshold_quantile = np.ceil(((n + 1) * (1 - self.alpha))) / n
-
-        threshold_quantile = np.clip(threshold_quantile, 0.0, 1.0)
-
-        return torch.quantile(final_softmax_scores_sorted, threshold_quantile)
+        return scores
