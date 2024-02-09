@@ -271,7 +271,6 @@ class DAPS:
     def __init__(self, alpha, model, dataset, calibration_mask, seed, random_split, neighborhood_coefficient):
 
         #super().__init__(alpha, model, dataset, calibration_mask, seed)
-
         seed_everything(seed)
 
         self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
@@ -301,7 +300,7 @@ class DAPS:
 
         #First step: Calculate the aggregated neighborhood scores
         neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
-        neighborhood_logits_norm = neighborhood_logits / (1 / (self.D + 1e-10))[:, None]
+        neighborhood_logits_norm = neighborhood_logits * (1 / (self.D + 1e-10))[:, None]
 
         daps_scores = logit_scores * (1-self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
 
@@ -326,8 +325,8 @@ class DAPS:
         # Get the random score
         if self.random_split:
             u_vec = torch.rand_like(softmax_score_true_class)
-            ##Add the random noise to it (and subtract the softmax_true_class as we previously included it)
-            # v * softmax -1 * softmax = (v-1) softmax_true_class
+            ## Add the random noise to it (and subtract the softmax_true_class as we previously included it)
+            ## v * softmax -1 * softmax = (v-1) softmax_true_class
             softmax_scores_cut += (u_vec - 1) * softmax_score_true_class
             random_noise = u_vec * softmax_score_true_class
             softmax_scores_cut += random_noise - softmax_score_true_class
@@ -349,7 +348,7 @@ class DAPS:
 
         #First step: Calculate the aggregated neighborhood scores
         neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
-        neighborhood_logits_norm = neighborhood_logits / (1 / (self.D + 1e-10))[:, None]
+        neighborhood_logits_norm = neighborhood_logits * (1 / (self.D + 1e-10))[:, None]
 
         daps_scores = logit_scores * (1-self.neighborhood_coefficient) + self.neighborhood_coefficient * neighborhood_logits_norm
 
@@ -418,9 +417,10 @@ class K_Hop_DAPS:
         #First we can get the
         k_hop_scores = self.neighborhood_coefficients[0] * logit_scores
 
+        #ToDo: Check this one!
         for i in range(1, len(self.neighborhood_coefficients)):
             neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
-            neighborhood_logits_norm = (neighborhood_logits / (1 / (self.D + 1e-10))[:, None])**i
+            neighborhood_logits_norm = (neighborhood_logits * (1 / (self.D + 1e-10))[:, None])**i
             k_hop_scores += self.neighborhood_coefficients[i] * neighborhood_logits_norm
 
         softmax_scores = F.softmax(k_hop_scores[calibration_mask], dim=1)
@@ -470,7 +470,7 @@ class K_Hop_DAPS:
 
         for i in range(1, len(self.neighborhood_coefficients)):
             neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), logit_scores)
-            neighborhood_logits_norm = (neighborhood_logits / (1 / (self.D + 1e-10))[:, None]) ** i
+            neighborhood_logits_norm = (neighborhood_logits * (1 / (self.D + 1e-10))[:, None]) ** i
             k_hop_scores += self.neighborhood_coefficients[i] * neighborhood_logits_norm
 
         softmax_scores = F.softmax(k_hop_scores[test_set_mask], dim=1)
@@ -495,7 +495,6 @@ class K_Hop_DAPS:
         return prediction_sets
 
 class Score_Propagation:
-
     """
     Implements the score propagation (SP) algorithm as presented in the paper:
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
@@ -536,20 +535,14 @@ class Score_Propagation:
 
         # Get first H0 score
         h0_score = (1-self.neighborhood_coefficient) * logit_scores
-        #h0_score = self.neighborhood_coefficient * logit_scores
         # Store the score as we need this for the iteration
         h_score = h0_score.clone()
 
         for _ in range(self.iterations):
-            degree_norm_adj = (self.A.to_dense()) / (1 / (self.D + 1e-10)[:, None])
-            degree_norm_adj = (self.A.to_dense()) / ((self.D + 1e-10)[:, None])
+            degree_norm_adj = (self.A.to_dense()) * (1 / (self.D + 1e-10)[:, None])
             node_wise_score = torch.linalg.matmul(degree_norm_adj, h_score)
             #node_wise_score = torch.linalg.matmul(h_score, degree_norm_adj)
             h_score = h0_score + self.neighborhood_coefficient * node_wise_score
-
-            # neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), h_score)
-            # neighborhood_logits_norm = (neighborhood_logits / (1 / (self.D + 1e-10))[:, None])
-            # h_score = h0_score + self.neighborhood_coefficient * neighborhood_logits_norm
 
         softmax_scores = F.softmax(h_score[calibration_mask], dim=1)
 
@@ -573,7 +566,7 @@ class Score_Propagation:
         if self.random_split:
             u_vec = torch.rand_like(softmax_score_true_class)
             ##Add the random noise to it (and subtract the softmax_true_class as we previously included it)
-            # v * softmax -1 * softmax = (v-1) softmax_true_class
+            ## v * softmax -1 * softmax = (v-1) softmax_true_class
             softmax_scores_cut += (u_vec - 1) * softmax_score_true_class
             random_noise = u_vec * softmax_score_true_class
             softmax_scores_cut += random_noise - softmax_score_true_class
@@ -594,23 +587,14 @@ class Score_Propagation:
         logit_scores = self.model(self.x, self.edge_index)
 
         # Get first H0 score
-
-
         h0_score = (1 - self.neighborhood_coefficient) * logit_scores
-        #h0_score = self.neighborhood_coefficient * logit_scores
         # Store the score as we need this for the iteration
         h_score = h0_score.clone()
 
         for _ in range(self.iterations):
-            # degree_norm_adj = (self.A.to_dense()) / (1 / (self.D + 1e-10)[:, None])
             degree_norm_adj = (self.A.to_dense()) / ((self.D + 1e-10)[:, None])
             node_wise_score = torch.linalg.matmul(degree_norm_adj, h_score)
-            #node_wise_score = torch.linalg.matmul(h_score, degree_norm_adj)
             h_score = h0_score + self.neighborhood_coefficient * node_wise_score
-
-            # neighborhood_logits = torch.linalg.matmul(self.A.to_dense(), h_score)
-            # neighborhood_logits_norm = (neighborhood_logits / (1 / (self.D + 1e-10))[:, None])
-            # h_score = h0_score + self.neighborhood_coefficient * neighborhood_logits_norm
 
         softmax_scores = F.softmax(h_score[test_set_mask], dim=1)
 
