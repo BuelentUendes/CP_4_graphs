@@ -176,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument("--random_seed", help="Specify the seed", type=int, default=1)
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--alpha", help="alpha value for the conformal prediction. 1-alpha is the coverage that one wants to achieve",
-                        type=float, default=0.05)
+                        type=float, default=0.10)
     parser.add_argument("--constant_penalty", help="Applies constant penalty to the regularized version", action="store_true")
     parser.add_argument("--random_split", help="Boolean indicating if we want to randomly split. Default True", action="store_false")
 
@@ -188,34 +188,3 @@ if __name__ == "__main__":
 
     #Start training
     main(args)
-
-
-
-
-#ToDo: 31.01.2024
-# Write RAPS -> Done! -> Double-check the logic!
-# Write DAPS -> Done!
-
-#ToDo 29.01.2024:
-# Write split conformal prediction -> Done!
-# Adaptive split conformal prediction -> Done!
-# Siglehit and efficiency -> Done!
-# Tune -> most results are not as good as the benchmarks as reported!
-
-
-#ToDo: 26.01.2024
-# Check in place to(self.device) is not inplace!
-# Vectorize to make it a sparse matrix!
-
-# Store results across architectures and seeds and average them and get the average and standard deviation performance
-# Synthetic Cora -> Gradient-Gating for DEEP-MULTI RATE Learning on Graphs
-# Write conformal prediction split procedure
-# Write the diffusion score procedure
-# Write performance metric scores; singlehit and efficiency
-# Look into setup.py/toml installation script
-
-
-
-
-
-
