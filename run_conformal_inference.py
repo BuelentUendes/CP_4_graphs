@@ -36,7 +36,7 @@ def parse_dataset(arg):
 def parse_model(arg):
 
     if arg == "all":
-        return ["GCN","GAT","SAGE","APPNPNet"]
+        return ["GCN", "GAT", "SAGE", "APPNPNet"]
 
     else:
         models = arg.split(",")
@@ -76,18 +76,18 @@ def main(args):
                 raise FileNotFoundError(f"Please run the 'train_models.py' with {model_type} for dataset {args.dataset} and seed {args.random_seed} first!")
 
             # Get the DAPS
-            daps_conformer = DAPS(args.alpha, model, dataset, true_calibration_idx, random_split=args.random_split,
+            daps_conformer = DAPS(args.alpha, model, dataset, true_calibration_idx, random_tie_breaking=args.random_tie_breaking,
                                   seed=args.random_seed, neighborhood_coefficient=0.5)
             daps_prediction_sets = daps_conformer.get_prediction_sets(test_idx)
 
             # Get the 2-K neighborhood scores
-            k_hop_conformer = K_Hop_DAPS(args.alpha, model, dataset, true_calibration_idx, random_split=args.random_split, k=2,
-                                  seed=args.random_seed, neighborhood_coefficients=[0.8, 0.2])
+            k_hop_conformer = K_Hop_DAPS(args.alpha, model, dataset, true_calibration_idx, random_tie_breaking=args.random_tie_breaking, k=2,
+                                         seed=args.random_seed, neighborhood_coefficients=[0.8, 0.2])
             k_hop_prediction_sets = k_hop_conformer.get_prediction_sets(test_idx)
 
             # Get the score propagation scores
-            score_propagation_conformer = Score_Propagation(args.alpha, model, dataset, true_calibration_idx, random_split=args.random_split,
-                                  seed=args.random_seed, neighborhood_coefficient=0.85)
+            score_propagation_conformer = Score_Propagation(args.alpha, model, dataset, true_calibration_idx, random_tie_breaking=args.random_tie_breaking,
+                                                            seed=args.random_seed, neighborhood_coefficient=0.85)
             score_propagation_prediction_sets = score_propagation_conformer.get_prediction_sets(test_idx)
 
 
@@ -96,12 +96,12 @@ def main(args):
                                                       seed=args.random_seed)
             threshold_prediction_sets = threshold_conformer.get_prediction_sets(test_idx)
             adaptive_conformer = Adaptive_Conformer(args.alpha, model, dataset, true_calibration_idx,
-                                                    random_split=args.random_split,
+                                                    random_tie_breaking=args.random_tie_breaking,
                                                     lambda_penalty=0., k_reg=2, seed=args.random_seed)
             adaptive_prediction_sets = adaptive_conformer.get_prediction_sets(test_idx)
 
             regularized_conformer = Adaptive_Conformer(args.alpha, model, dataset, true_calibration_idx,
-                                                       random_split=args.random_split,
+                                                       random_tie_breaking=args.random_tie_breaking,
                                                        lambda_penalty=1, k_reg=1, constant_penalty=args.constant_penalty, seed=args.random_seed)
             regularized_prediction_sets = regularized_conformer.get_prediction_sets(test_idx)
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument("--alpha", help="alpha value for the conformal prediction. 1-alpha is the coverage that one wants to achieve",
                         type=float, default=0.10)
     parser.add_argument("--constant_penalty", help="Applies constant penalty to the regularized version", action="store_true")
-    parser.add_argument("--random_split", help="Boolean indicating if we want to randomly split. Default True", action="store_false")
+    parser.add_argument("--random_tie_breaking", help="Boolean indicating if we want to randomly break ties. Default True", action="store_false")
 
     #We add the homophile argument. However, this is only used for the MixHop dataset
     parser.add_argument("--homophily", help="Level of homophily. This is only used for the 'Mixhop' dataset."

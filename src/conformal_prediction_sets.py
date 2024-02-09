@@ -89,7 +89,7 @@ class Threshold_Conformer(ABC):
 
 class Adaptive_Conformer(Abstract_Conformer):
 
-    def __init__(self, alpha, model, dataset, calibration_mask, random_split=False,
+    def __init__(self, alpha, model, dataset, calibration_mask, random_tie_breaking=False,
                  lambda_penalty=0., k_reg=1, constant_penalty=False, seed=7):
 
         super().__init__()
@@ -99,7 +99,7 @@ class Adaptive_Conformer(Abstract_Conformer):
         self.model = model
         self.x, self.edge_index, self.y = dataset.x, dataset.edge_index, dataset.y
         self.calibration_mask = calibration_mask
-        self.random_split = random_split
+        self.random_tie_breaking = random_tie_breaking
         self.lambda_penalty = lambda_penalty
         self.k_reg = k_reg
         self.constant_penalty = constant_penalty
@@ -158,7 +158,7 @@ class Adaptive_Conformer(Abstract_Conformer):
         softmax_scores_cut = torch.tensor([cumulative_softmax_scores[sample, idx] for sample, idx in cutoff_idx]).reshape(-1, 1)
 
         # Get the random score
-        if self.random_split:
+        if self.random_tie_breaking:
             u_vec = torch.rand_like(softmax_score_true_class)
             ##Add the random noise to it (and subtract the softmax_true_class as we previously included it)
             # v * softmax -1 * softmax = (v-1) softmax_true_class
@@ -259,9 +259,9 @@ class DAPS(Adaptive_Conformer):
     Implements the diffusion adaptive score on top of an APS as presented in the paper:
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
     """
-    def __init__(self, alpha, model, dataset, calibration_mask, seed, random_split, neighborhood_coefficient):
+    def __init__(self, alpha, model, dataset, calibration_mask, seed, random_tie_breaking, neighborhood_coefficient):
 
-        super().__init__(alpha, model, dataset, calibration_mask, random_split=random_split, seed=seed)
+        super().__init__(alpha, model, dataset, calibration_mask, random_tie_breaking=random_tie_breaking, seed=seed)
 
         self.num_nodes = self.x.shape[0]
         self.neighborhood_coefficient = neighborhood_coefficient
@@ -298,9 +298,9 @@ class K_Hop_DAPS(Adaptive_Conformer):
     https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf
     """
     def __init__(self, alpha, model, dataset, calibration_mask, seed,
-                 random_split, k, neighborhood_coefficients):
+                 random_tie_breaking, k, neighborhood_coefficients):
 
-        super().__init__(alpha, model, dataset, calibration_mask, random_split=random_split, seed=seed)
+        super().__init__(alpha, model, dataset, calibration_mask, random_tie_breaking=random_tie_breaking, seed=seed)
 
         self.num_nodes = self.x.shape[0]
 
@@ -345,9 +345,9 @@ class Score_Propagation(Adaptive_Conformer):
     """
 
     def __init__(self, alpha, model, dataset, calibration_mask, seed,
-                 random_split, neighborhood_coefficient, iterations=10):
+                 random_tie_breaking, neighborhood_coefficient, iterations=10):
 
-        super().__init__(alpha, model, dataset, calibration_mask, random_split=random_split, seed=seed)
+        super().__init__(alpha, model, dataset, calibration_mask, random_tie_breaking=random_tie_breaking, seed=seed)
         self.num_nodes = self.x.shape[0]
 
         self.neighborhood_coefficient = neighborhood_coefficient
