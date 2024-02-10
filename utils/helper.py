@@ -52,7 +52,7 @@ def get_data(dataset_name:str, root:str=DATA_PATH, homophily:float=0.3):
         torch_geometric.data.Data: The loaded dataset.
     """
     # Validate dataset_name
-    supported_datasets = ["Cora", "Citeseer", "Pubmed", "Amazon-Computers", "Amazon-Photos",
+    supported_datasets = ["Cora", "Citeseer", "Pubmed", "Amazon-Computers", "Amazon-Photo",
                           "Coauthor-Physics", "Coauthor-CS", "Mixhop", "OGBN-Arxiv", "OGBN-Products"]
 
     #check if the datasets folder exists otherwise creates the folder
@@ -64,7 +64,7 @@ def get_data(dataset_name:str, root:str=DATA_PATH, homophily:float=0.3):
     if dataset_name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root=root, name=dataset_name, transform=T.NormalizeFeatures())
 
-    elif dataset_name in ["Amazon-Computers", "Amazon-Photos"]:
+    elif dataset_name in ["Amazon-Computers", "Amazon-Photo"]:
         dataset = Amazon(root=os.path.join(root, dataset_name), name=dataset_name.split("-")[-1],
                                           transform=T.NormalizeFeatures())
 
@@ -149,11 +149,10 @@ class DataManager:
         #We get the test and train idx
         test_idx = np.random.choice(node_idx, replace=False, size=n_test)
         train_idx = np.setdiff1d(node_idx, test_idx)
-
         return train_idx, test_idx
 
     def get_calibration_split(self, train_idx, equal_samples_per_cls=True,
-                              number_nodes_per_cls=80, percentage_train_data=1/3, tuning_set=False, percentage_tuning_data=None):
+                              number_nodes_per_cls=40, percentage_train_data=0.5, tuning_set=False, percentage_tuning_data=None):
 
         #ToDo: Clean this a bit up and write it more concisely
 
@@ -259,8 +258,6 @@ class Graph_Trainer:
         n_epochs = kwargs.get("n_epochs", 200)
         self.early_stopping = kwargs.get("early_stopping", False)
         self.patience = kwargs.get("patience", 10)
-        #self.verbose = verbose
-        #verbose = kwargs.get("verbose", True)
 
         self.warm_up = 50
 
@@ -338,7 +335,6 @@ class Graph_Trainer:
         return torch.mean((torch.argmax(y_pred, dim=-1) == y_true).float(), dim=0)
 
     def test(self, data, test_mask):
-
         #Set the model to evaluation mode
         self.model.eval()
         self.model.to(self.device)

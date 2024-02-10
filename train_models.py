@@ -19,7 +19,7 @@ import argparse
 def parse_dataset(arg):
 
     if arg == "all":
-        return ["Cora", "Citeseer", "Pubmed", "Amazon-Computers", "Amazon-Photos",
+        return ["Cora", "Citeseer", "Pubmed", "Amazon-Computers", "Amazon-Photo",
                           "Coauthor-Physics", "Coauthor-CS", "Mixhop", "OGBN-Arxiv", "OGBN-Products"]
     else:
         datasets = arg.split(",")
@@ -29,7 +29,7 @@ def parse_dataset(arg):
 def parse_model(arg):
 
     if arg == "all":
-        return ["GCN","GAT","SAGE","APPNPNet"]
+        return ["GCN", "GAT", "SAGE", "APPNPNet"]
 
     else:
         models = arg.split(",")
@@ -56,6 +56,9 @@ def main(args):
         true_train_idx, true_calibration_idx, true_tuning_idx = datamanager.get_calibration_split(train_idx,
                                                                                                   tuning_set=True,
                                                                                                   percentage_tuning_data=0.5)
+        
+        true_train_idx, true_calibration_idx = datamanager.get_calibration_split(train_idx, tuning_set=False, percentage_tuning_data=0.5)
+        
         #Train each model
         for model_type in args.model:
 
@@ -75,13 +78,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Cora")
+    parser.add_argument("--dataset", help="Specify which dataset to use", type=parse_dataset, default="Amazon-Photo")
     parser.add_argument("--model", help="Specify which model(s) you want to train and use", type=parse_model, default="GCN")
-    parser.add_argument("--random_seed", help="Specify the seed", type=int, default=5)
+    parser.add_argument("--random_seed", help="Specify the seed", type=int, default=1)
     parser.add_argument("--models_config_file", help="name of the model config file", default="models_config_file.yaml", type=str)
     parser.add_argument("--training_config_file", help="name of the training config_file", default="training_config_file.yaml", type=str)
     parser.add_argument("--save_model", help="Boolean flag indicating if model should be saved", action="store_true")
-    parser.add_argument("--verbose", help="Boolean. Default False. If output should be printed", action="store_true")
+    parser.add_argument("--verbose", help="Boolean. Default False. If output should be printed", action="store_false")
 
     #We add the homophile argument. However, this is only used for the MixHop dataset
     parser.add_argument("--homophily", help="Level of homophily. This is only used for the 'Mixhop' dataset."
