@@ -1,5 +1,9 @@
-# Conformal predictions for Graphs
+# Conformal Predictions for Graphs
 Code basis for the final project of the course: **"Machine Learning for Graphs"** taught at the Vrije Universiteit Amsterdam, 2024. 
+In this repo, I implement, compare and reproduce results for different conformal prediction methods for various graph machine learning models. In particular,
+I reproduce the methods introduced in the paper "Conformal Prediction Sets for Graph Neural Networks" which can be found [here](https://proceedings.mlr.press/v202/h-zargarbashi23a/h-zargarbashi23a.pdf)
+and therefore this repo heavily depends upon their [code bases](https://github.com/soroushzargar/DAPS).
+
 **This is work in progress and will be updated incrementally.**
 ___
 **Installation:**
