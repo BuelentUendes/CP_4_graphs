@@ -17,6 +17,9 @@ from utils.helper import seed_everything
 
 
 class Abstract_Conformer(ABC):
+    """
+    Define an abstract class for conformal classes
+    """
 
     @abstractmethod
     def get_prediction_sets(self):
@@ -29,9 +32,6 @@ class Abstract_Conformer(ABC):
     @abstractmethod
     def _get_transformed_logit_scores(self):
         return
-
-
-# ToDo: Push to device!
 
 
 class Threshold_Conformer(ABC):
