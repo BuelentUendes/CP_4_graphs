@@ -1,35 +1,44 @@
 # Helper functions file
 
 # PyTorch geometric
-import torch_geometric.transforms as T
-from torch_geometric.datasets import Planetoid, Amazon, Coauthor, MixHopSyntheticDataset
-from ogb.nodeproppred import PygNodePropPredDataset
-from src.models import GCN, GAT, SAGE, APPNPNet
-import torch.optim as optim
-from torch_geometric.utils import homophily
-from utils.helper_path import DATA_PATH, MODELS_PATH
 import os
 import random
+
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import torch_geometric.transforms as T
 import yaml
+from ogb.nodeproppred import PygNodePropPredDataset
+from torch_geometric.datasets import (
+    Amazon,
+    Coauthor,
+    MixHopSyntheticDataset,
+    Planetoid,
+)
+from torch_geometric.utils import homophily
 
-def seed_everything(seed:int):
+from src.models import GAT, GCN, SAGE, APPNPNet
+from utils.helper_path import DATA_PATH, MODELS_PATH
+
+
+def seed_everything(seed: int):
     """
     Sets a seed for reproducibility
     :param seed: seed
     :return: None
     """
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
-def create_directory(path:str):
+
+def create_directory(path: str):
     """
     Checks if a dictionary exists and creates it if necessary
     :param path: path to check
@@ -38,8 +47,8 @@ def create_directory(path:str):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def get_data(dataset_name:str, root:str=DATA_PATH, homophily:float=0.3):
 
+def get_data(dataset_name: str, root: str = DATA_PATH, homophily: float = 0.3):
     """
     Load and return a dataset based on the specified dataset_name.
 
@@ -52,38 +61,61 @@ def get_data(dataset_name:str, root:str=DATA_PATH, homophily:float=0.3):
         torch_geometric.data.Data: The loaded dataset.
     """
     # Validate dataset_name
-    supported_datasets = ["Cora", "Citeseer", "Pubmed", "Amazon-Computers", "Amazon-Photo",
-                          "Coauthor-Physics", "Coauthor-CS", "Mixhop", "OGBN-Arxiv", "OGBN-Products"]
+    supported_datasets = [
+        "Cora",
+        "Citeseer",
+        "Pubmed",
+        "Amazon-Computers",
+        "Amazon-Photo",
+        "Coauthor-Physics",
+        "Coauthor-CS",
+        "Mixhop",
+        "OGBN-Arxiv",
+        "OGBN-Products",
+    ]
 
-    #check if the datasets folder exists otherwise creates the folder
+    # check if the datasets folder exists otherwise creates the folder
     create_directory(root)
 
     if dataset_name not in supported_datasets:
         raise ValueError(f"The dataset '{dataset_name}' is not supported.")
 
     if dataset_name in ["Cora", "Citeseer", "Pubmed"]:
-        dataset = Planetoid(root=root, name=dataset_name, transform=T.NormalizeFeatures())
+        dataset = Planetoid(
+            root=root, name=dataset_name, transform=T.NormalizeFeatures()
+        )
 
     elif dataset_name in ["Amazon-Computers", "Amazon-Photo"]:
-        dataset = Amazon(root=os.path.join(root, dataset_name), name=dataset_name.split("-")[-1],
-                                          transform=T.NormalizeFeatures())
+        dataset = Amazon(
+            root=os.path.join(root, dataset_name),
+            name=dataset_name.split("-")[-1],
+            transform=T.NormalizeFeatures(),
+        )
 
     elif dataset_name in ["Coauthor-Physics", "Coauthor-CS"]:
-        dataset = Coauthor(root=os.path.join(root, dataset_name), name=dataset_name.split("-")[-1],
-                                        transform=T.NormalizeFeatures())
+        dataset = Coauthor(
+            root=os.path.join(root, dataset_name),
+            name=dataset_name.split("-")[-1],
+            transform=T.NormalizeFeatures(),
+        )
 
     elif dataset_name in ["Mixhop"]:
-        dataset = MixHopSyntheticDataset(root=os.path.join(root, dataset_name), homophily=homophily, transform=T.NormalizeFeatures())
+        dataset = MixHopSyntheticDataset(
+            root=os.path.join(root, dataset_name),
+            homophily=homophily,
+            transform=T.NormalizeFeatures(),
+        )
 
     elif dataset_name in ["OGBN-Arxiv", "OGBN-Products"]:
         dataset = PygNodePropPredDataset(name=dataset_name.lower(), root=root)
 
-    #Retrieve the data
+    # Retrieve the data
     data = dataset[0]
 
     return data
 
-def load_yaml_config_file(path_to_yaml_file:str):
+
+def load_yaml_config_file(path_to_yaml_file: str):
     """
     Loads a yaml file
     :param path_to_yaml_file:
@@ -94,7 +126,8 @@ def load_yaml_config_file(path_to_yaml_file:str):
             config = yaml.safe_load(file)
         return config
     except FileNotFoundError:
-        print('We could not find the yaml file that you specified')
+        print("We could not find the yaml file that you specified")
+
 
 def get_homophily(edge_idx, y):
     """
@@ -105,8 +138,8 @@ def get_homophily(edge_idx, y):
     """
     return np.round(homophily(edge_idx, y), 4)
 
-def get_model(model_name, num_features, num_classes, **kwargs):
 
+def get_model(model_name, num_features, num_classes, **kwargs):
     """
     Loads the model
     :param model_name: model_type
@@ -125,8 +158,11 @@ def get_model(model_name, num_features, num_classes, **kwargs):
     elif model_name == "APPNPNet":
         model = APPNPNet(num_features, num_classes, **kwargs)
     else:
-        raise ValueError("Please indicate one of the available models. 'GCN', 'GAT', 'SAGE' or 'APPNPNET'")
+        raise ValueError(
+            "Please indicate one of the available models. 'GCN', 'GAT', 'SAGE' or 'APPNPNET'"
+        )
     return model
+
 
 class DataManager:
 
@@ -146,36 +182,54 @@ class DataManager:
         n_train = int(len(self.x) * percentage_train_data)
         n_test = len(self.x) - n_train
 
-        #We get the test and train idx
+        # We get the test and train idx
         test_idx = np.random.choice(node_idx, replace=False, size=n_test)
         train_idx = np.setdiff1d(node_idx, test_idx)
         return train_idx, test_idx
 
-    def get_calibration_split(self, train_idx, equal_samples_per_cls=True,
-                              number_nodes_per_cls=40, percentage_train_data=0.5, tuning_set=False, percentage_tuning_data=None):
+    def get_calibration_split(
+        self,
+        train_idx,
+        equal_samples_per_cls=True,
+        number_nodes_per_cls=40,
+        percentage_train_data=0.5,
+        tuning_set=False,
+        percentage_tuning_data=None,
+    ):
 
-        #ToDo: Clean this a bit up and write it more concisely
+        # ToDo: Clean this a bit up and write it more concisely
 
         node_classes = self.y.unique()
         n_train = int(len(train_idx) * percentage_train_data)
 
         if tuning_set:
-            n_calibration = len(train_idx) - n_train * (1-percentage_tuning_data)
+            n_calibration = len(train_idx) - n_train * (
+                1 - percentage_tuning_data
+            )
         else:
             n_calibration = int(len(train_idx) - n_train)
 
         if not equal_samples_per_cls:
-            true_train_idx = np.random.choice(train_idx, replace=False, size=n_train)
+            true_train_idx = np.random.choice(
+                train_idx, replace=False, size=n_train
+            )
             total_calibration_idx = np.setdiff1d(train_idx, true_train_idx)
 
             if not tuning_set:
                 true_calibration_idx = total_calibration_idx
             else:
-                true_calibration_idx = np.random.choice(total_calibration_idx, replace=False, size=n_calibration)
-                true_tuning_idx = np.setdiff1d(true_calibration_idx, total_calibration_idx)
+                true_calibration_idx = np.random.choice(
+                    total_calibration_idx, replace=False, size=n_calibration
+                )
+                true_tuning_idx = np.setdiff1d(
+                    true_calibration_idx, total_calibration_idx
+                )
 
             # Quick check if things worked out as intended
-            assert len(true_train_idx) == n_train and len(true_calibration_idx) == n_calibration
+            assert (
+                len(true_train_idx) == n_train
+                and len(true_calibration_idx) == n_calibration
+            )
 
         else:
             true_train_idx = []
@@ -184,35 +238,60 @@ class DataManager:
                 true_tuning_idx = []
 
             for cls in node_classes:
-                #Retrieve idx for which the node has class label
-                class_idx = torch.nonzero(self.y==cls, as_tuple=True)[0]
+                # Retrieve idx for which the node has class label
+                class_idx = torch.nonzero(self.y == cls, as_tuple=True)[0]
                 # Example with default setting: 20 * 3 = 60 nodes in total for calibration and train
-                total_number_samples = int(number_nodes_per_cls * (1/percentage_train_data))
-                number_true_train_idx_samples = int(percentage_train_data * total_number_samples)
+                total_number_samples = int(
+                    number_nodes_per_cls * (1 / percentage_train_data)
+                )
+                number_true_train_idx_samples = int(
+                    percentage_train_data * total_number_samples
+                )
 
                 if tuning_set:
-                    number_true_calibration_samples = int((1 - percentage_train_data) * total_number_samples * (1-percentage_tuning_data))
+                    number_true_calibration_samples = int(
+                        (1 - percentage_train_data)
+                        * total_number_samples
+                        * (1 - percentage_tuning_data)
+                    )
                 else:
-                    number_true_calibration_samples = int((1 - percentage_train_data) * total_number_samples)
+                    number_true_calibration_samples = int(
+                        (1 - percentage_train_data) * total_number_samples
+                    )
 
-                total_number_calibration_samples = total_number_samples - number_true_train_idx_samples
+                total_number_calibration_samples = (
+                    total_number_samples - number_true_train_idx_samples
+                )
                 rdm_permutation_idx = torch.randperm(len(class_idx))
 
                 shuffled_class_idx = class_idx[rdm_permutation_idx]
-                true_train_idx.extend(shuffled_class_idx[:number_true_train_idx_samples].tolist())
+                true_train_idx.extend(
+                    shuffled_class_idx[:number_true_train_idx_samples].tolist()
+                )
 
-                total_calibration_idx = shuffled_class_idx[number_true_train_idx_samples:number_true_train_idx_samples + total_number_calibration_samples].tolist()
+                total_calibration_idx = shuffled_class_idx[
+                    number_true_train_idx_samples : number_true_train_idx_samples
+                    + total_number_calibration_samples
+                ].tolist()
 
                 if tuning_set:
-                    true_calibration_idx.extend(total_calibration_idx[:number_true_calibration_samples])
-                    true_tuning_idx.extend(total_calibration_idx[number_true_calibration_samples:])
+                    true_calibration_idx.extend(
+                        total_calibration_idx[:number_true_calibration_samples]
+                    )
+                    true_tuning_idx.extend(
+                        total_calibration_idx[number_true_calibration_samples:]
+                    )
 
                 else:
                     true_calibration_idx.extend(total_calibration_idx)
 
             # Quick check if things worked out as intended
-            assert len(true_train_idx) == number_true_train_idx_samples * len(node_classes)
-            assert len(true_calibration_idx) == number_true_calibration_samples * len(node_classes)
+            assert len(true_train_idx) == number_true_train_idx_samples * len(
+                node_classes
+            )
+            assert len(
+                true_calibration_idx
+            ) == number_true_calibration_samples * len(node_classes)
 
         if tuning_set:
             return true_train_idx, true_calibration_idx, true_tuning_idx
@@ -220,8 +299,10 @@ class DataManager:
         else:
             return true_train_idx, true_calibration_idx
 
-#Code adapted from:
+
+# Code adapted from:
 # https://github.com/soroushzargar/DAPS/blob/main/torch-conformal/gnn_cp/models/model_manager.py
+
 
 class Graph_Trainer:
 
@@ -233,24 +314,42 @@ class Graph_Trainer:
         learning_rate = kwargs.get("learning_rate", 1e-3)
         weight_decay = kwargs.get("weight_decay", 1e-4)
 
-        self.optimizer = self._get_optimizer(optimizer_name, self.model.parameters(), learning_rate, weight_decay)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.optimizer = self._get_optimizer(
+            optimizer_name,
+            self.model.parameters(),
+            learning_rate,
+            weight_decay,
+        )
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
 
-    def _get_optimizer(self, optimizer_name, parameters, learning_rate, weight_decay):
+    def _get_optimizer(
+        self, optimizer_name, parameters, learning_rate, weight_decay
+    ):
         if optimizer_name == "adam":
-            optimizer = optim.Adam(parameters, lr=learning_rate, weight_decay=weight_decay)
+            optimizer = optim.Adam(
+                parameters, lr=learning_rate, weight_decay=weight_decay
+            )
 
         elif optimizer_name == "sgd":
-            optimizer = optim.SGD(parameters, lr=learning_rate, momentum=0.90, weight_decay=weight_decay)
+            optimizer = optim.SGD(
+                parameters,
+                lr=learning_rate,
+                momentum=0.90,
+                weight_decay=weight_decay,
+            )
 
-        elif optimizer_name == 'rmsprop':
-            optimizer = optim.RMSprop(parameters, lr=learning_rate, weight_decay=weight_decay)
+        elif optimizer_name == "rmsprop":
+            optimizer = optim.RMSprop(
+                parameters, lr=learning_rate, weight_decay=weight_decay
+            )
 
         return optimizer
 
     def fit(self, data, train_mask, valid_mask, verbose, **kwargs):
         x, edge_index, y = data.x, data.edge_index, data.y
-        #Set the model to train mode
+        # Set the model to train mode
         self.model.train()
 
         warm_up = kwargs.get("warm_up", True)
@@ -261,45 +360,53 @@ class Graph_Trainer:
 
         self.warm_up = 50
 
-        #Set the model to training
+        # Set the model to training
         self.model.train().to(self.device)
 
-        #Keep track of the best validation loss so far -> we minimize!
+        # Keep track of the best validation loss so far -> we minimize!
         best_validation_loss = 1000
 
-        #Do a warmup in case the boolean flag was set
+        # Do a warmup in case the boolean flag was set
         if warm_up:
             for warm_up_epoch in range(warm_up_epochs):
-                _, loss_valid, _ = self._train(x, edge_index, y, train_mask, valid_mask)
+                _, loss_valid, _ = self._train(
+                    x, edge_index, y, train_mask, valid_mask
+                )
 
-                #Keep track of the best validation loss so far
+                # Keep track of the best validation loss so far
                 if loss_valid < best_validation_loss:
                     best_validation_loss = loss_valid
 
-        for epoch in range(1, n_epochs+1):
-            #We train full batch
-            #Log every 10 steps
+        for epoch in range(1, n_epochs + 1):
+            # We train full batch
+            # Log every 10 steps
             if verbose and (epoch % 10 == 0):
-                print(f'Epoch {epoch:3d} - ', end='')
+                print(f"Epoch {epoch:3d} - ", end="")
 
-            loss_train, loss_valid, accuracy_train = self._train(x, edge_index, y, train_mask, valid_mask)
+            loss_train, loss_valid, accuracy_train = self._train(
+                x, edge_index, y, train_mask, valid_mask
+            )
 
             # Early stopping based on validation loss, if the validation loss does not decrease in 10 consecutive epochs we break
             if self.early_stopping:
                 if loss_valid < best_validation_loss:
                     best_validation_loss = loss_valid
-                    #Save the best checkpoint so far
+                    # Save the best checkpoint so far
                     self.best_checkpoint = self.model.state_dict()
-                    #Reset the patience score
+                    # Reset the patience score
                     self.patience = kwargs.get("patience", 10)
                 else:
                     self.patience -= 1
 
             if verbose and (epoch % 10 == 0):
-                print(f'train_loss: {float(loss_train):.4f}\ttrain_acc: {accuracy_train:.4f}\tvalid_loss: {loss_valid:.4f}')
+                print(
+                    f"train_loss: {float(loss_train):.4f}\ttrain_acc: {accuracy_train:.4f}\tvalid_loss: {loss_valid:.4f}"
+                )
 
             if self.patience == 0:
-                print(f'Training is stopped as the model has not improved the validation loss in the past {kwargs.get("patience")} epochs!')
+                print(
+                    f'Training is stopped as the model has not improved the validation loss in the past {kwargs.get("patience")} epochs!'
+                )
                 # If the model has not improved the past patience steps, then we stop training
                 break
 
@@ -313,7 +420,9 @@ class Graph_Trainer:
         """
         Performs an iteration of the training
         """
-        y_pred = self.model(x.to(self.device), edge_index.to(self.device)).cpu()
+        y_pred = self.model(
+            x.to(self.device), edge_index.to(self.device)
+        ).cpu()
         y_pred_train, y_pred_valid = y_pred[train_mask], y_pred[valid_mask]
         y_true_train, y_true_valid = y[train_mask], y[valid_mask]
 
@@ -321,7 +430,7 @@ class Graph_Trainer:
         loss_train = self.loss_module(y_pred_train, y_true_train)
         loss_valid = self.loss_module(y_pred_valid, y_true_valid)
 
-        #Calculate the accuracies
+        # Calculate the accuracies
         accuracy_train = self._get_accuracy(y_pred_train, y_true_train)
 
         # Zero gradients, perform backward pass and update the weights
@@ -332,23 +441,25 @@ class Graph_Trainer:
         return loss_train, loss_valid, accuracy_train
 
     def _get_accuracy(self, y_pred, y_true):
-        return torch.mean((torch.argmax(y_pred, dim=-1) == y_true).float(), dim=0)
+        return torch.mean(
+            (torch.argmax(y_pred, dim=-1) == y_true).float(), dim=0
+        )
 
     def test(self, data, test_mask):
-        #Set the model to evaluation mode
+        # Set the model to evaluation mode
         self.model.eval()
         self.model.to(self.device)
         y_true = data.y[test_mask]
-        y_pred = self.model(data.x.to(self.device), data.edge_index.to(self.device))[test_mask].cpu()
-        loss = float(self.loss_module(y_pred, y_true)) #Release memory
+        y_pred = self.model(
+            data.x.to(self.device), data.edge_index.to(self.device)
+        )[test_mask].cpu()
+        loss = float(self.loss_module(y_pred, y_true))  # Release memory
         accuracy = self._get_accuracy(y_pred, y_true)
 
-        print(f'test loss {loss:.4f}\ttest_acc {accuracy:.4f}')
+        print(f"test loss {loss:.4f}\ttest_acc {accuracy:.4f}")
 
 
-
-
-#Code adapted from: https://lightning.ai/docs/pytorch/stable/notebooks/course_UvA-DL/06-graph-neural-networks.html
+# Code adapted from: https://lightning.ai/docs/pytorch/stable/notebooks/course_UvA-DL/06-graph-neural-networks.html
 # class Graph_Trainer(L.LightningModule):
 #
 #     def __init__(self, model, train_mask, valid_mask, test_mask, optimizer_name, learning_rate, weight_decay):
@@ -413,19 +524,22 @@ class Graph_Trainer:
 #         self.log("test_accuracy", acc)
 #         return loss
 
-#Code adapted from: https://lightning.ai/docs/pytorch/stable/notebooks/course_UvA-DL/06-graph-neural-networks.html
+# Code adapted from: https://lightning.ai/docs/pytorch/stable/notebooks/course_UvA-DL/06-graph-neural-networks.html
 
-def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration_set):
+
+def get_coverage(
+    prediction_sets, dataset, test_set_mask, alpha, len_calibration_set
+):
 
     y_test = dataset.y[test_set_mask]
     n = len(y_test)
     coverage = 0
-    #Check if label is contained in prediction_set
+    # Check if label is contained in prediction_set
     for idx, set in enumerate(prediction_sets):
         if y_test[idx] in set:
             coverage += 1
 
-    empirical_coverage = round(float(coverage/n), 4)
+    empirical_coverage = round(float(coverage / n), 4)
 
     # Check if we get approximately true coverage based on asymptotics
     l = np.floor((len_calibration_set + 1) * alpha)
@@ -433,10 +547,15 @@ def get_coverage(prediction_sets, dataset, test_set_mask, alpha, len_calibration
     b = l
     variance = (a * b) / ((a * b) ** 2) * (a + b + 1)
 
-    #Check if we have valid coverage based on asymptotics!
-    assert empirical_coverage - round(3*np.sqrt(variance), 4) <= 1-alpha <= empirical_coverage + round(3*np.sqrt(variance), 4), "The coverage is not valid!"
+    # Check if we have valid coverage based on asymptotics!
+    assert (
+        empirical_coverage - round(3 * np.sqrt(variance), 4)
+        <= 1 - alpha
+        <= empirical_coverage + round(3 * np.sqrt(variance), 4)
+    ), "The coverage is not valid!"
 
     return empirical_coverage
+
 
 def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
 
@@ -445,46 +564,34 @@ def get_singleton_hit_ratio(prediction_sets, dataset, test_set_mask):
 
     # Filter out prediction_sets larger than 1 and convert them to PyTorch tensors
     set_size_one = torch.tensor([len(x) == 1 for x in prediction_sets])
-    predicted_labels_singletons = torch.tensor([x[0] for x in prediction_sets if len(x) == 1])
+    predicted_labels_singletons = torch.tensor(
+        [x[0] for x in prediction_sets if len(x) == 1]
+    )
 
     # Slice the list of true labels accordingly and convert to PyTorch tensors
     true_labels_singletons = y_test[set_size_one]
 
     # Calculate the number of correct singletons
-    correct_singletons = torch.sum(predicted_labels_singletons == true_labels_singletons)
+    correct_singletons = torch.sum(
+        predicted_labels_singletons == true_labels_singletons
+    )
 
     # Calculate singleton hit ratio
     singleton_hit_ratio = round(correct_singletons.item() / len(y_test), 4)
 
     return singleton_hit_ratio
 
+
 def get_efficiency(prediction_sets):
 
-    #Filter first zero/empty sets
-    non_zero_prediction_sets = list(filter(lambda x: len(x) > 0, prediction_sets))
-    len_non_zero_prediction_sets = list(map(lambda x: len(x), non_zero_prediction_sets))
+    # Filter first zero/empty sets
+    non_zero_prediction_sets = list(
+        filter(lambda x: len(x) > 0, prediction_sets)
+    )
+    len_non_zero_prediction_sets = list(
+        map(lambda x: len(x), non_zero_prediction_sets)
+    )
 
     average_set_size = np.mean(len_non_zero_prediction_sets)
 
     return round(float(average_set_size), 4)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
