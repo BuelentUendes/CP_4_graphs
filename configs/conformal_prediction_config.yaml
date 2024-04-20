@@ -1,0 +1,29 @@
+DAPS:
+  neighborhood_coefficient: 0.5
+  random_tie_breaking: True
+
+K_Hop_DAPS:
+  k: 2
+  neighborhood_coefficients: [0.8, 0.2]
+  random_tie_breaking: True
+
+Score_Propagation:
+  neighborhood_coefficient: 0.85
+  random_tie_breaking: True
+
+Adaptive_Conformer:
+  lambda_penalty: 0.0
+  k_reg: 2
+  constant_penalty: False
+  random_tie_breaking: True
+
+Regularized_Conformer:
+  lambda_penalty: 1.0
+  k_reg: 1
+  constant_penalty: False
+  random_tie_breaking: True
+
+
+
+
+
