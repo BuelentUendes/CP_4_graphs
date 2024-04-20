@@ -1,7 +1,7 @@
 training_protocols:
   GCN:
     optimizer_name: "adam"
-    learning_rate: 0.01
+    learning_rate: 0.001
     weight_decay: 0.001
     warm_up: true
     warm_up_epochs: 50
@@ -11,8 +11,8 @@ training_protocols:
 
   GAT:
     optimizer_name: "adam"
-    learning_rate: 0.01
-    weight_decay: 0.01
+    learning_rate: 0.0001 #0.0001
+    weight_decay: 0.0001
     warm_up: true
     warm_up_epochs: 50
     n_epochs: 200
@@ -22,7 +22,7 @@ training_protocols:
   SAGE:
     optimizer_name: "adam"
     learning_rate: 0.001
-    weight_decay: 0.01
+    weight_decay: 0.001
     warm_up: true
     warm_up_epochs: 50
     early_stopping: false
