@@ -31,6 +31,15 @@ pip3 install -r requirements.txt
 python3 train_models.py
 ~~~
 
+This will run by default a standard GCN on the Cora dataset. 
+
+5. Now you can compare different conformal prediction methods against each other by running:
+
+~~~
+python3 run_conformal_inference.py
+~~~
+
+This command will create a "results" folder in which you will find a .csv file with the metrics associated to each conformal prediction method.
 The "src" folder includes the source code for the models, whereas the "utils" folder includes additional utility functions needed for the project.
 
 **Tested environment:**
