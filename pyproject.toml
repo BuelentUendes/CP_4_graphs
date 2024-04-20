@@ -1,0 +1,21 @@
+[tool.black]
+line-length = 79 # PEP8 standard
+exclude = '''
+/(
+    .datasets
+    .configs
+    .figures
+    .saved_models
+    requirements.txt
+    todo.txt
+)/
+'''# iSort
+[tool.isort]
+profile = "black"
+line_length = 79 # PEP8 is 79
+multi_line_output = 3
+include_trailing_comma = true
+
+
+
+
