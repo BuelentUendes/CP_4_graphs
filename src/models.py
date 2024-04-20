@@ -4,7 +4,8 @@
 # Standard PyTorch library imports
 import torch
 import torch.nn as nn
-from torch_geometric.nn import GCNConv, GATConv, APPNP, SAGEConv
+from torch_geometric.nn import APPNP, GATConv, GCNConv, SAGEConv
+
 
 class GCN(nn.Module):
 
@@ -18,7 +19,7 @@ class GCN(nn.Module):
 
         super().__init__()
         n_hidden = kwargs.get("n_hidden", 64)
-        p_dropout = kwargs.get("p_dropout", 0.8)
+        p_dropout = kwargs.get("p_dropout", 0.6)
 
         self.conv1 = GCNConv(n_features, n_hidden)
         self.conv2 = GCNConv(n_hidden, n_classes)
@@ -32,6 +33,7 @@ class GCN(nn.Module):
         x = self.conv2(x, edge_index, edge_weight)
 
         return x
+
 
 class GAT(nn.Module):
 
@@ -49,8 +51,12 @@ class GAT(nn.Module):
         p_dropout = kwargs.get("p_dropout", 0.6)
         p_dropout_attention = kwargs.get("p_dropout_attention", 0.3)
 
-        self.conv1 = GATConv(n_features, n_hidden, heads=n_heads, dropout=p_dropout_attention, concat=True)
-        self.conv2 = GATConv(n_hidden*n_heads, n_classes, heads=1, dropout=p_dropout_attention, concat=False)
+        self.conv1 = GATConv(
+            n_features, n_hidden, heads=n_heads, dropout=p_dropout_attention
+        )
+        self.conv2 = GATConv(
+            n_hidden * n_heads, n_classes, heads=1, concat=False
+        )
         self.elu = nn.ELU(inplace=True)
         self.dropout = nn.Dropout(p=p_dropout)
 
@@ -62,10 +68,10 @@ class GAT(nn.Module):
 
         return x
 
+
 class SAGE(nn.Module):
 
     def __init__(self, n_features, n_classes, aggregator="mean", **kwargs):
-
         """
         Standard GraphSAGE model
         :param n_features: number of features
@@ -78,9 +84,13 @@ class SAGE(nn.Module):
         n_hidden = kwargs.get("n_hidden", 64)
         p_dropout = kwargs.get("p_dropout", 0.4)
 
-        self.conv1 = SAGEConv(n_features, n_hidden, normalize=True, aggr=aggregator)
+        self.conv1 = SAGEConv(
+            n_features, n_hidden, normalize=True, aggr=aggregator
+        )
         self.lin1 = nn.Linear(n_features + n_hidden, n_hidden)
-        self.conv2 = SAGEConv(n_hidden, n_classes, normalize=True, aggr=aggregator)
+        self.conv2 = SAGEConv(
+            n_hidden, n_classes, normalize=True, aggr=aggregator
+        )
         self.relu = nn.ReLU(inplace=True)
         self.dropout = nn.Dropout(p=p_dropout)
 
@@ -94,10 +104,10 @@ class SAGE(nn.Module):
 
         return x
 
+
 class APPNPNet(nn.Module):
 
     def __init__(self, n_features, n_classes, **kwargs):
-
         """
         Implementation of the approximate personalized pagerank neural prediction layer
         :param n_features: number of features
@@ -125,11 +135,3 @@ class APPNPNet(nn.Module):
         x = self.appnp(x, edge_index)
 
         return x
-
-        #Check if this is correct?
-        #return F.log_softmax(x, dim=1)
-
-
-
-
-
