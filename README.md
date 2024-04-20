@@ -25,7 +25,8 @@ $ source <NAME_OF_YOUR_VIRTUALENV>/bin/activate
 pip3 install -r requirements.txt
 ~~~
 
-4. Now you can check if the installation has worked by running:
+**Usage**
+4. You can train several different models using the script:
 
 ~~~
 python3 train_models.py
