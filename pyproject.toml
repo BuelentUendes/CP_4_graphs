@@ -7,7 +7,6 @@ exclude = '''
     .figures
     .saved_models
     requirements.txt
-    todo.txt
 )/
 '''# iSort
 [tool.isort]
